@@ -6,7 +6,7 @@ const docker = new Docker({ socketPath: '/var/run/docker.sock' });
 export default class Containers extends Command {
   static args = {
     Operation: Args.string({
-      description: 'Operation to perform on Docker containers (stopAll, stop, start, ps, remove, update)',
+      description: 'Operation to perform on Docker containers (stopAll, stop, start, ps, remove, update, inspect)',
       required: true,
     }),
     ContainerId: Args.string({
@@ -33,7 +33,7 @@ export default class Containers extends Command {
     }),
   };
 
-  static description = 'Run Docker operations such as stopping, removing, starting, updating, or listing containers on the server';
+  static description = 'Run Docker operations such as stopping, removing, starting, updating, inspecting, or listing containers on the server';
 
   static examples = [
     '<%= config.bin %> <%= command.id %> stopAll',
@@ -43,6 +43,7 @@ export default class Containers extends Command {
     '<%= config.bin %> <%= command.id %> remove <container_id> -r',
     '<%= config.bin %> <%= command.id %> start <container_id>',
     '<%= config.bin %> <%= command.id %> update <container_id>',
+    '<%= config.bin %> <%= command.id %> inspect <container_id>',
   ];
 
   async run(): Promise<void> {
@@ -85,10 +86,14 @@ export default class Containers extends Command {
           await this.handleRemove(args.ContainerId);
           break;
 
+        case 'inspect':
+          if (!args.ContainerId) throw new Error('Container ID is required for the inspect operation.');
+          await this.handleInspect(args.ContainerId);
+          break;
         default:
-          throw new Error(`Invalid operation: ${args.Operation}. Supported operations are: startAll, stopAll, stop, start, ps, remove, update.`);
+          throw new Error(`Invalid operation: ${args.Operation}. Supported operations are: startAll, stopAll, stop, start, ps, remove, update, inspect.`);
       }
-    } catch (error:any) {
+    } catch (error: any) {
       this.error(error.message);
     }
   }
@@ -136,7 +141,7 @@ export default class Containers extends Command {
     this.log('Listing containers...');
     const containers = await this.listContainers({ all: flags.all || false });
     containers.forEach(containerInfo => {
-      this.log(`ID: ${containerInfo.Id}, Image: ${containerInfo.Image}, Status: ${containerInfo.Status}, Name : ${containerInfo.Names}`);
+      this.log(`ID: ${containerInfo.Id}, Image: ${containerInfo.Image}, Status: ${containerInfo.Status}, Name: ${containerInfo.Names}`);
     });
   }
 
@@ -145,9 +150,15 @@ export default class Containers extends Command {
     await this.removeContainer(containerId);
   }
 
+  private async handleInspect(containerId: string): Promise<void> {
+    this.log(`Inspecting container ${containerId}...`);
+    const data = await this.inspectContainer(containerId);
+    this.log(JSON.stringify(data, null, 2));
+  }
+
   private async listContainers(options: any): Promise<ContainerInfo[]> {
     return new Promise((resolve, reject) => {
-      docker.listContainers(options, (err, containers:any) => {
+      docker.listContainers(options, (err, containers: any) => {
         if (err) return reject(err);
         resolve(containers);
       });

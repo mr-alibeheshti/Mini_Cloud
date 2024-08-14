@@ -1,5 +1,7 @@
 import { Args, Command, Flags } from '@oclif/core';
 import { Container } from 'dockerode';
+import { env } from 'process';
+import { getEnvironmentData } from 'worker_threads';
 const Docker = require('dockerode');
 
 const docker = new Docker({ socketPath: '/var/run/docker.sock' });
@@ -13,6 +15,7 @@ export default class Run extends Command {
   static flags = {
     connectionType: Flags.string({ description: 'UDP/TCP, default: TCP', default: 'tcp',char: 'c'}),
     name: Flags.string({ description: 'Custom name of Conatainer',char: 'n'}),
+    environment: Flags.string({ description: 'Environment data in format KEY=value,KEY2=value2', char: 'e' }),
 
   }
 
@@ -53,7 +56,10 @@ export default class Run extends Command {
       });
 
       const connectionType = flags.connectionType.toLowerCase();
-
+      let envArray: string[] = [];
+      if (flags.environment) {
+        envArray = flags.environment.split(',').map((env) => env.trim());
+      }
       this.log(`Running image ${args.Image} on host port ${flags.host}...`);
       const container = await docker.createContainer({
         Image: args.Image,
@@ -62,7 +68,8 @@ export default class Run extends Command {
           PortBindings: { [`${ContainerPort}/${connectionType}`]: [{HostPort}] },
         },
         Tty: true,
-        name : flags.name
+        name : flags.name,
+        env: envArray
       });
 
       await container.start();
