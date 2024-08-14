@@ -1,23 +1,33 @@
-import { Args, Command } from '@oclif/core';
+import { Args, Command, Flags } from '@oclif/core';
+import { Container } from 'dockerode';
 const Docker = require('dockerode');
 
 const docker = new Docker({ socketPath: '/var/run/docker.sock' });
 
-export default class Deploy extends Command {
+export default class Run extends Command {
   static args = {
+    port: Args.string({ description: 'Port Of Host:Container', required: true }),
     Image: Args.string({ description: 'Name of Docker Image in Docker Hub', required: true }),
+    
   };
+  static flags = {
+    connectionType: Flags.string({ description: 'UDP/TCP, default: TCP', default: 'tcp',char: 'c'}),
+  }
 
-  static description = 'Deploy Your Docker Image from Docker Hub on Server';
+  static description = 'run Your Docker Image from Docker Hub on Server';
 
   static examples = [
-    `<%= config.bin %> <%= command.id %> httpd`,
+    `<%= config.bin %> <%= command.id %> 80:80 -c udp httpd`,
   ];
 
   async run(): Promise<void> {
-    const { args } = await this.parse(Deploy);
-    this.log(`You Selected ${args.Image}`);
-
+    const { args, flags } = await this.parse(Run);
+    const ports = args.port.split(':');
+    if(ports.length != 2){
+      this.error('Invalid port format. Use the format host:container, e.g., 8080:80.');
+    }
+    let HostPort = ports[0]
+    let ContainerPort = ports[1]
     try {
       this.log(`Pulling image ${args.Image} from Docker Hub...`);
       await new Promise<void>((resolve, reject) => {
@@ -25,14 +35,14 @@ export default class Deploy extends Command {
           if (err) {
             return reject(err);
           }
-          docker.modem.followProgress(stream, 
-            (err: any, output: any) => {
+          docker.modem.followProgress(stream,
+            (err: any) => {
               if (err) {
                 return reject(err);
               }
               this.log('Image pull finished successfully.');
               resolve();
-            }, 
+            },
             (event: any) => {
               this.log(event.status);
             }
@@ -40,17 +50,16 @@ export default class Deploy extends Command {
         });
       });
 
-      this.log(`Running image ${args.Image} on port 80...`);
+      const connectionType = flags.connectionType.toLowerCase();
+
+      this.log(`Running image ${args.Image} on host port ${flags.host}...`);
       const container = await docker.createContainer({
         Image: args.Image,
-        ExposedPorts: { '80/tcp': {} }, // Expose port 80
+        ExposedPorts: { [`${ContainerPort}/${connectionType}`]: {} },
         HostConfig: {
-          PortBindings: { '80/tcp': [{ HostPort: '80' }] }, // Bind container port 80 to host port 80
+          PortBindings: { [`${ContainerPort}/${connectionType}`]: [{HostPort}] },
         },
         Tty: true,
-        AttachStdin: true, 
-        AttachStdout: true,
-        AttachStderr: true
       });
 
       await container.start();
@@ -58,7 +67,7 @@ export default class Deploy extends Command {
       const logs = await container.logs({
         stdout: true,
         stderr: true,
-        follow: true
+        follow: true,
       });
 
       if (logs instanceof require('stream').Readable) {
@@ -71,9 +80,10 @@ export default class Deploy extends Command {
 
       await container.wait();
 
+      this.log(`Container ${container.id} finished execution.`);
       await container.remove();
     } catch (error) {
-      this.error(`Failed to deploy Docker image: ${error}`);
+      this.error(`Failed to run Docker image: ${error}`);
     }
   }
 }
