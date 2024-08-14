@@ -31,9 +31,14 @@ export default class Containers extends Command {
       description: 'List all containers including stopped ones',
       required: false,
     }),
+    volume: Flags.string({
+      char: 'v',
+      description: 'Path to volume to be mounted to the container',
+      required: false,
+    }),
   };
 
-  static description = 'Run Docker operations such as stopping, removing, starting, updating, inspecting, or listing containers on the server';
+  static description = 'Run Docker operations such as stopping, removing, starting, updating, or listing containers on the server';
 
   static examples = [
     '<%= config.bin %> <%= command.id %> stopAll',
@@ -44,6 +49,7 @@ export default class Containers extends Command {
     '<%= config.bin %> <%= command.id %> start <container_id>',
     '<%= config.bin %> <%= command.id %> update <container_id>',
     '<%= config.bin %> <%= command.id %> inspect <container_id>',
+    '<%= config.bin %> <%= command.id %> start <container_id> -v /path/to/volume:/container/path',
   ];
 
   async run(): Promise<void> {
@@ -66,7 +72,7 @@ export default class Containers extends Command {
 
         case 'start':
           if (!args.ContainerId) throw new Error('Container ID is required for the start operation.');
-          await this.handleStart(args.ContainerId);
+          await this.handleStart(args.ContainerId, flags.volume);
           break;
 
         case 'update':
@@ -90,6 +96,7 @@ export default class Containers extends Command {
           if (!args.ContainerId) throw new Error('Container ID is required for the inspect operation.');
           await this.handleInspect(args.ContainerId);
           break;
+
         default:
           throw new Error(`Invalid operation: ${args.Operation}. Supported operations are: startAll, stopAll, stop, start, ps, remove, update, inspect.`);
       }
@@ -119,9 +126,9 @@ export default class Containers extends Command {
     await this.stopContainer(containerId, flags);
   }
 
-  private async handleStart(containerId: string): Promise<void> {
+  private async handleStart(containerId: string, volume?: string): Promise<void> {
     this.log(`Starting container ${containerId}...`);
-    await this.startContainer(containerId);
+    await this.startContainer(containerId, volume);
   }
 
   private async handleUpdateAll(): Promise<void> {
@@ -189,16 +196,30 @@ export default class Containers extends Command {
     });
   }
 
-  private async startContainer(containerId: string): Promise<void> {
+  private async startContainer(containerId: string, volumeName?: string): Promise<void> {
     const container = docker.getContainer(containerId);
+    const data = await this.inspectContainer(containerId);
+
+    const binds = volumeName ? [`${volumeName}:${data.Config.WorkingDir || '/app'}`] : [];
+
+    if (binds.length > 0) {
+        await container.update({
+            HostConfig: {
+                Binds: binds
+            }
+        });
+    }
+
     return new Promise((resolve, reject) => {
-      container.start((err: any) => {
-        if (err) return reject(new Error(`Error starting container ${containerId}: ${err.message}`));
-        this.log(`Started container ${containerId}`);
-        resolve();
-      });
+        container.start((err: any) => {
+            if (err) return reject(new Error(`Error starting container ${containerId}: ${err.message}`));
+            this.log(`Started container ${containerId} with volume ${volumeName}`);
+            resolve();
+        });
     });
-  }
+}
+
+
 
   private async removeContainer(containerId: string): Promise<void> {
     const container = docker.getContainer(containerId);

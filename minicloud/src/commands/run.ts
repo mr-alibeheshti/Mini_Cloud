@@ -1,38 +1,49 @@
 import { Args, Command, Flags } from '@oclif/core';
-import { Container } from 'dockerode';
-import { env } from 'process';
-import { getEnvironmentData } from 'worker_threads';
-const Docker = require('dockerode');
+import Docker from 'dockerode';
 
 const docker = new Docker({ socketPath: '/var/run/docker.sock' });
 
 export default class Run extends Command {
   static args = {
-    port: Args.string({ description: 'Port Of Host:Container', required: true }),
     Image: Args.string({ description: 'Name of Docker Image in Docker Hub', required: true }),
-    
   };
+
   static flags = {
-    connectionType: Flags.string({ description: 'UDP/TCP, default: TCP', default: 'tcp',char: 'c'}),
-    name: Flags.string({ description: 'Custom name of Conatainer',char: 'n'}),
+    port: Flags.string({ description: 'Port of Host:Container', required: true, char: 'p' }),
+    connectionType: Flags.string({ description: 'UDP/TCP, default: TCP', default: 'tcp', char: 'c' }),
+    name: Flags.string({ description: 'Custom name of Container', char: 'n' }),
     environment: Flags.string({ description: 'Environment data in format KEY=value,KEY2=value2', char: 'e' }),
+    volume: Flags.string({ description: 'Volume mapping in format hostPath:containerPath', char: 'v' }),
+  };
 
-  }
-
-  static description = 'run Your Docker Image from Docker Hub on Server';
+  static description = 'Run your Docker image from Docker Hub on the server';
 
   static examples = [
-    `<%= config.bin %> <%= command.id %> 80:80 -c udp -n myContainer httpd`,
+    `<%= config.bin %> <%= command.id %> -p 80:80 -c tcp -n myContainer -v /host/path:/container/path httpd`,
   ];
 
   async run(): Promise<void> {
     const { args, flags } = await this.parse(Run);
-    const ports = args.port.split(':');
-    if(ports.length != 2){
+
+    const ports = flags.port.split(':');
+    if (ports.length !== 2) {
       this.error('Invalid port format. Use the format host:container, e.g., 8080:80.');
     }
-    let HostPort = ports[0]
-    let ContainerPort = ports[1]
+
+    const [HostPort, ContainerPort] = ports;
+    const connectionType = flags.connectionType.toLowerCase();
+    const envArray = flags.environment ? flags.environment.split(',').map((env) => env.trim()) : [];
+
+    const volumeBindings: { [key: string]: any } = {};
+    if (flags.volume) {
+      const volumes = flags.volume.split(':');
+      if (volumes.length !== 2) {
+        this.error('Invalid volume format. Use the format hostPath:containerPath.');
+      }
+      const [hostPath, containerPath] = volumes;
+      volumeBindings[hostPath] = { Bind: containerPath, Mode: 'rw' };
+    }
+
     try {
       this.log(`Pulling image ${args.Image} from Docker Hub...`);
       await new Promise<void>((resolve, reject) => {
@@ -55,21 +66,17 @@ export default class Run extends Command {
         });
       });
 
-      const connectionType = flags.connectionType.toLowerCase();
-      let envArray: string[] = [];
-      if (flags.environment) {
-        envArray = flags.environment.split(',').map((env) => env.trim());
-      }
-      this.log(`Running image ${args.Image} on host port ${flags.host}...`);
+      this.log(`Running image ${args.Image} on host port ${HostPort}...`);
       const container = await docker.createContainer({
         Image: args.Image,
         ExposedPorts: { [`${ContainerPort}/${connectionType}`]: {} },
         HostConfig: {
-          PortBindings: { [`${ContainerPort}/${connectionType}`]: [{HostPort}] },
+          PortBindings: { [`${ContainerPort}/${connectionType}`]: [{ HostPort }] },
+          Binds: flags.volume ? [flags.volume] : undefined,
         },
         Tty: true,
-        name : flags.name,
-        env: envArray
+        name: flags.name,
+        Env: envArray,
       });
 
       await container.start();
@@ -85,15 +92,15 @@ export default class Run extends Command {
           this.log(data.toString());
         });
       } else {
-        this.log('Logs are not in expected format.');
+        this.log('Logs are not in the expected format.');
       }
 
       await container.wait();
 
       this.log(`Container ${container.id} finished execution.`);
       await container.remove();
-    } catch (error) {
-      this.error(`Failed to run Docker image: ${error}`);
+    } catch (error: any) {
+      this.error(`Failed to run Docker image: ${error.message}`);
     }
   }
 }
