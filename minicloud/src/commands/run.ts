@@ -12,12 +12,14 @@ export default class Run extends Command {
   };
   static flags = {
     connectionType: Flags.string({ description: 'UDP/TCP, default: TCP', default: 'tcp',char: 'c'}),
+    name: Flags.string({ description: 'Custom name of Conatainer',char: 'n'}),
+
   }
 
   static description = 'run Your Docker Image from Docker Hub on Server';
 
   static examples = [
-    `<%= config.bin %> <%= command.id %> 80:80 -c udp httpd`,
+    `<%= config.bin %> <%= command.id %> 80:80 -c udp -n myContainer httpd`,
   ];
 
   async run(): Promise<void> {
@@ -60,6 +62,7 @@ export default class Run extends Command {
           PortBindings: { [`${ContainerPort}/${connectionType}`]: [{HostPort}] },
         },
         Tty: true,
+        name : flags.name
       });
 
       await container.start();
