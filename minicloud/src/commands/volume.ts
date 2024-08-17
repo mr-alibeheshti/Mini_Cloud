@@ -68,12 +68,12 @@ export default class Volume extends Command {
       Name: volumeName,
       Driver: driver,
       DriverOpts: driver === 'local' && mountPoint ? {
-        type: 'bind',
+        type: 'volume',
+        o: `bind`,
         device: mountPoint,
-        o: 'bind',
       } : undefined,
     };
-
+  
     try {
       await docker.createVolume(volumeConfig);
       this.log(`Created volume ${volumeName}`);
@@ -81,6 +81,7 @@ export default class Volume extends Command {
       throw new Error(`Error creating volume ${volumeName}: ${err.message}`);
     }
   }
+  
 
   private async removeVolume(volumeName: string): Promise<void> {
     try {

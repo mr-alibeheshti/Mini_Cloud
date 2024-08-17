@@ -1,4 +1,5 @@
 import { Args, Command, Flags } from '@oclif/core';
+import { integer } from '@oclif/core/lib/args';
 import Docker from 'dockerode';
 
 const docker = new Docker({ socketPath: '/var/run/docker.sock' });
@@ -10,16 +11,19 @@ export default class Run extends Command {
 
   static flags = {
     port: Flags.string({ description: 'Port of Host:Container', required: true, char: 'p' }),
-    connectionType: Flags.string({ description: 'UDP/TCP, default: TCP', default: 'tcp', char: 'c' }),
+    connectionType: Flags.string({ description: 'UDP/TCP, default: TCP', default: 'tcp', char: 't' }),
     name: Flags.string({ description: 'Custom name of Container', char: 'n' }),
     environment: Flags.string({ description: 'Environment data in format KEY=value,KEY2=value2', char: 'e' }),
     volume: Flags.string({ description: 'Volume mapping in format hostPath:containerPath', char: 'v' }),
+    ram: Flags.integer({ description: 'Volume mapping in format hostPath:containerPath', char: 'r' }),
+    cpu: Flags.integer({ description: 'Volume mapping in format hostPath:containerPath', char: 'c' }),
+
   };
 
   static description = 'Run your Docker image from Docker Hub on the server';
 
   static examples = [
-    `<%= config.bin %> <%= command.id %> -p 80:80 -c tcp -n myContainer -v /host/path:/container/path httpd`,
+    `<%= config.bin %> <%= command.id %> -p 80:80 -t tcp -n myContainer -r 640000000 -c 70 -v /host/path:/container/path httpd`,
   ];
 
   async run(): Promise<void> {
@@ -33,15 +37,17 @@ export default class Run extends Command {
     const [HostPort, ContainerPort] = ports;
     const connectionType = flags.connectionType.toLowerCase();
     const envArray = flags.environment ? flags.environment.split(',').map((env) => env.trim()) : [];
+    const cpuPercent = flags.cpu ?? 10;
+    const cpuPeriod = 1000000;
+    const cpuQuota = Math.round((cpuPeriod * cpuPercent) / 100);
 
-    const volumeBindings: { [key: string]: any } = {};
+    let volumeBindings: string[] = [];
     if (flags.volume) {
       const volumes = flags.volume.split(':');
       if (volumes.length !== 2) {
         this.error('Invalid volume format. Use the format hostPath:containerPath.');
       }
-      const [hostPath, containerPath] = volumes;
-      volumeBindings[hostPath] = { Bind: containerPath, Mode: 'rw' };
+      volumeBindings.push(flags.volume);
     }
 
     try {
@@ -71,14 +77,15 @@ export default class Run extends Command {
         Image: args.Image,
         ExposedPorts: { [`${ContainerPort}/${connectionType}`]: {} },
         HostConfig: {
+          Memory: flags.ram ? flags.ram * 1024 * 1024 : 25 * 1024 * 1024,
+          CpuQuota: cpuQuota,
+          CpuPeriod: cpuPeriod,
           PortBindings: { [`${ContainerPort}/${connectionType}`]: [{ HostPort }] },
-          Binds: flags.volume ? [flags.volume] : undefined,
+          Binds: volumeBindings.length > 0 ? volumeBindings : undefined,
         },
-        Tty: true,
         name: flags.name,
         Env: envArray,
       });
-
       await container.start();
 
       const logs = await container.logs({
@@ -94,11 +101,7 @@ export default class Run extends Command {
       } else {
         this.log('Logs are not in the expected format.');
       }
-
       await container.wait();
-
-      this.log(`Container ${container.id} finished execution.`);
-      await container.remove();
     } catch (error: any) {
       this.error(`Failed to run Docker image: ${error.message}`);
     }
