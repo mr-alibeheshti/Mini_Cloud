@@ -31,7 +31,7 @@ export default class Run extends Command {
 
     const ports = flags.port.split(':');
     if (ports.length !== 2) {
-      this.error('Invalid port format. Use the format host:container, e.g., 8080:80.');
+      this.error('Invalid port format . Use the format host:container, e.g., 8080:80.');
     }
 
     const [HostPort, ContainerPort] = ports;
