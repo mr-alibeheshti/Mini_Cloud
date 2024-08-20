@@ -1,0 +1,35 @@
+services:
+  fluentd:
+    build: ./fluentd
+    ports:
+      - "24224:24224"
+      - "24224:24224/udp"
+    volumes:
+      - ./fluentd/fluent.conf:/fluentd/etc/fluent.conf
+    environment:
+      FLUENTD_ARGS: "--no-supervisor"
+
+  loki:
+    user: "root"
+    image: grafana/loki:2.7.2
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./loki/config:/etc/loki
+      - loki-storage:/loki
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-storage:/var/lib/grafana
+
+volumes:
+  loki-storage:
+  grafana-storage:
+
+networks:
+  default:
+    driver: bridge

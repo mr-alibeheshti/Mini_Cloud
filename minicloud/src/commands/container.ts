@@ -1,5 +1,6 @@
 import { Args, Command, Flags } from '@oclif/core';
 import Docker, { ContainerInfo } from 'dockerode';
+import axios from 'axios';
 
 const docker = new Docker({ socketPath: '/var/run/docker.sock' });
 
@@ -57,6 +58,11 @@ export default class Containers extends Command {
 
     try {
       switch (args.Operation) {
+        case 'metrics':
+          if (!args.ContainerId) throw new Error('Container ID is required for the metrics operation.');
+          await this.getContainerMetrics(args.ContainerId);
+          break;
+
         case 'startAll':
           await this.handleStartAll();
           break;
@@ -105,6 +111,20 @@ export default class Containers extends Command {
     }
   }
 
+  private async getContainerMetrics(containerId: string) {
+    try {
+      const response = await axios.get(`http://localhost:9090/api/v1/query`, {
+        params: {
+          query: `container_cpu_usage_seconds_total{container_label_io_kubernetes_pod_name="${containerId}"}`
+        }
+      });
+      const cpuUsage = response.data.data.result[0]?.value[1];
+      console.log(`CPU Usage for container ${containerId}: ${cpuUsage}`);
+    } catch (error:any) {
+      console.error(`Error fetching metrics for container ${containerId}: ${error.message}`);
+    }
+  }
+  
   private async handleStartAll(): Promise<void> {
     this.log('Starting all containers...');
     const containers = await this.listContainers({ all: true });
@@ -218,8 +238,6 @@ export default class Containers extends Command {
         });
     });
 }
-
-
 
   private async removeContainer(containerId: string): Promise<void> {
     const container = docker.getContainer(containerId);

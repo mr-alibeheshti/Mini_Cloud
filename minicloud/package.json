@@ -11,6 +11,7 @@
     "@oclif/core": "^4",
     "@oclif/plugin-help": "^6",
     "@oclif/plugin-plugins": "^5",
+    "axios": "^1.7.4",
     "dockerode": "^4.0.2"
   },
   "devDependencies": {

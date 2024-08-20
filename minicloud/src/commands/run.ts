@@ -93,6 +93,7 @@ export default class Run extends Command {
         stderr: true,
         follow: true,
       });
+      
 
       if (logs instanceof require('stream').Readable) {
         logs.on('data', (data: Buffer) => {
