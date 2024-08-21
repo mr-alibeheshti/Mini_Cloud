@@ -58,10 +58,6 @@ export default class Containers extends Command {
 
     try {
       switch (args.Operation) {
-        case 'metrics':
-          if (!args.ContainerId) throw new Error('Container ID is required for the metrics operation.');
-          await this.getContainerMetrics(args.ContainerId);
-          break;
 
         case 'startAll':
           await this.handleStartAll();
@@ -88,7 +84,10 @@ export default class Containers extends Command {
             await this.handleUpdate(args.ContainerId);
           }
           break;
-
+        case 'logs': 
+          if (!args.ContainerId) throw new Error('Container ID or Container Name  is required for the logs operation.');
+          await this.getContainerLogs(args.ContainerId);
+          break;
         case 'ps':
           await this.handlePs(flags);
           break;
@@ -111,20 +110,6 @@ export default class Containers extends Command {
     }
   }
 
-  private async getContainerMetrics(containerId: string) {
-    try {
-      const response = await axios.get(`http://localhost:9090/api/v1/query`, {
-        params: {
-          query: `container_cpu_usage_seconds_total{container_label_io_kubernetes_pod_name="${containerId}"}`
-        }
-      });
-      const cpuUsage = response.data.data.result[0]?.value[1];
-      console.log(`CPU Usage for container ${containerId}: ${cpuUsage}`);
-    } catch (error:any) {
-      console.error(`Error fetching metrics for container ${containerId}: ${error.message}`);
-    }
-  }
-  
   private async handleStartAll(): Promise<void> {
     this.log('Starting all containers...');
     const containers = await this.listContainers({ all: true });
@@ -308,5 +293,28 @@ export default class Containers extends Command {
         });
       });
     });
+  }
+  private async getContainerLogs(containerId: string): Promise<void> {
+    try {
+      const response = await axios.get('http://localhost:3100/loki/api/v1/query_range', {
+        params: {
+          query: `{logs="container_id"} == "${containerId}"`,
+          limit: 100,
+        },
+      });
+  
+      const logs = response.data.data.result;
+      if (logs.length === 0) {
+        this.log(`No logs found for container ${containerId}`);
+      } else {
+        logs.forEach((log: any) => {
+          log.values.forEach((value: any) => {
+            this.log(`[${new Date(parseInt(value[0], 10) / 1000000).toISOString()}] ${value[1]}`);
+          });
+        });
+      }
+    } catch (error: any) {
+      this.error(`Error fetching logs for container ${containerId}: ${error.message}`);
+    }
   }
 }

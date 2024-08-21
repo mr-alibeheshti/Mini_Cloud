@@ -1,5 +1,4 @@
 import { Args, Command, Flags } from '@oclif/core';
-import { integer } from '@oclif/core/lib/args';
 import Docker from 'dockerode';
 
 const docker = new Docker({ socketPath: '/var/run/docker.sock' });
@@ -15,9 +14,8 @@ export default class Run extends Command {
     name: Flags.string({ description: 'Custom name of Container', char: 'n' }),
     environment: Flags.string({ description: 'Environment data in format KEY=value,KEY2=value2', char: 'e' }),
     volume: Flags.string({ description: 'Volume mapping in format hostPath:containerPath', char: 'v' }),
-    ram: Flags.integer({ description: 'Volume mapping in format hostPath:containerPath', char: 'r' }),
-    cpu: Flags.integer({ description: 'Volume mapping in format hostPath:containerPath', char: 'c' }),
-
+    ram: Flags.integer({ description: 'Memory limit for the container in MB', char: 'r' }),
+    cpu: Flags.integer({ description: 'CPU quota for the container as a percentage', char: 'c' }),
   };
 
   static description = 'Run your Docker image from Docker Hub on the server';
@@ -31,7 +29,7 @@ export default class Run extends Command {
 
     const ports = flags.port.split(':');
     if (ports.length !== 2) {
-      this.error('Invalid port format . Use the format host:container, e.g., 8080:80.');
+      this.error('Invalid port format. Use the format host:container, e.g., 8080:80.');
     }
 
     const [HostPort, ContainerPort] = ports;
@@ -82,6 +80,12 @@ export default class Run extends Command {
           CpuPeriod: cpuPeriod,
           PortBindings: { [`${ContainerPort}/${connectionType}`]: [{ HostPort }] },
           Binds: volumeBindings.length > 0 ? volumeBindings : undefined,
+          LogConfig: {
+            Type: "fluentd",
+            Config: {
+              "tag": "docker.{{.ID}}"
+            }
+          }
         },
         name: flags.name,
         Env: envArray,
@@ -93,7 +97,6 @@ export default class Run extends Command {
         stderr: true,
         follow: true,
       });
-      
 
       if (logs instanceof require('stream').Readable) {
         logs.on('data', (data: Buffer) => {

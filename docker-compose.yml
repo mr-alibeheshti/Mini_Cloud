@@ -6,7 +6,7 @@ services:
       - "3100:3100"
     command: -config.file=/etc/loki/local-config.yaml
     volumes:
-      - ./loki/config:/etc/loki
+      - ./logging/loki/config:/etc/loki
       - loki-storage:/loki
 
   grafana:
@@ -20,7 +20,7 @@ services:
     image: my-fluentd-image
     command: ["fluentd", "-c", "/fluentd/etc/fluent.conf"]
     volumes:
-      - ./fluentd/:/fluentd/etc
+      - ./logging/fluentd/:/fluentd/etc
     ports:
       - "24224:24224"
     networks:
