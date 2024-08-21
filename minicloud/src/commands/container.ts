@@ -7,7 +7,7 @@ const docker = new Docker({ socketPath: '/var/run/docker.sock' });
 export default class Containers extends Command {
   static args = {
     Operation: Args.string({
-      description: 'Operation to perform on Docker containers (stopAll, stop, start, ps, remove, update, inspect)',
+      description: 'Operation to perform on Docker containers (stopAll, stop, start, ps, remove, update, inspect, logs)',
       required: true,
     }),
     ContainerId: Args.string({
@@ -37,6 +37,21 @@ export default class Containers extends Command {
       description: 'Path to volume to be mounted to the container',
       required: false,
     }),
+    ram: Flags.integer({
+      description: 'Memory limit for the container in MB',
+      char: 'm',
+      required: false,
+    }),
+    cpu: Flags.integer({
+      description: 'CPU quota for the container as a percentage',
+      char: 'c',
+      required: false,
+    }),
+    port: Flags.string({
+      description: 'Port mapping in format hostPort:containerPort',
+      char: 'p',
+      required: false,
+    }),
   };
 
   static description = 'Run Docker operations such as stopping, removing, starting, updating, or listing containers on the server';
@@ -50,7 +65,7 @@ export default class Containers extends Command {
     '<%= config.bin %> <%= command.id %> start <container_id>',
     '<%= config.bin %> <%= command.id %> update <container_id>',
     '<%= config.bin %> <%= command.id %> inspect <container_id>',
-    '<%= config.bin %> <%= command.id %> start <container_id> -v /path/to/volume:/container/path',
+    '<%= config.bin %> <%= command.id %> logs <container_id>',
   ];
 
   async run(): Promise<void> {
@@ -58,25 +73,20 @@ export default class Containers extends Command {
 
     try {
       switch (args.Operation) {
-
         case 'startAll':
           await this.handleStartAll();
           break;
-
         case 'stopAll':
           await this.handleStopAll(flags);
           break;
-
         case 'stop':
           if (!args.ContainerId) throw new Error('Container ID is required for the stop operation.');
           await this.handleStop(args.ContainerId, flags);
           break;
-
         case 'start':
           if (!args.ContainerId) throw new Error('Container ID is required for the start operation.');
           await this.handleStart(args.ContainerId, flags.volume);
           break;
-
         case 'update':
           if (!args.ContainerId) {
             await this.handleUpdateAll();
@@ -84,26 +94,23 @@ export default class Containers extends Command {
             await this.handleUpdate(args.ContainerId);
           }
           break;
-        case 'logs': 
-          if (!args.ContainerId) throw new Error('Container ID or Container Name  is required for the logs operation.');
+        case 'logs':
+          if (!args.ContainerId) throw new Error('Container ID is required for the logs operation.');
           await this.getContainerLogs(args.ContainerId);
           break;
         case 'ps':
           await this.handlePs(flags);
           break;
-
         case 'remove':
           if (!args.ContainerId) throw new Error('Container ID is required for the remove operation.');
           await this.handleRemove(args.ContainerId);
           break;
-
         case 'inspect':
           if (!args.ContainerId) throw new Error('Container ID is required for the inspect operation.');
           await this.handleInspect(args.ContainerId);
           break;
-
         default:
-          throw new Error(`Invalid operation: ${args.Operation}. Supported operations are: startAll, stopAll, stop, start, ps, remove, update, inspect.`);
+          throw new Error(`Invalid operation: ${args.Operation}. Supported operations are: startAll, stopAll, stop, start, ps, remove, update, inspect, logs.`);
       }
     } catch (error: any) {
       this.error(error.message);
@@ -208,21 +215,21 @@ export default class Containers extends Command {
     const binds = volumeName ? [`${volumeName}:${data.Config.WorkingDir || '/app'}`] : [];
 
     if (binds.length > 0) {
-        await container.update({
-            HostConfig: {
-                Binds: binds
-            }
-        });
+      await container.update({
+        HostConfig: {
+          Binds: binds
+        }
+      });
     }
 
     return new Promise((resolve, reject) => {
-        container.start((err: any) => {
-            if (err) return reject(new Error(`Error starting container ${containerId}: ${err.message}`));
-            this.log(`Started container ${containerId} with volume ${volumeName}`);
-            resolve();
-        });
+      container.start((err: any) => {
+        if (err) return reject(new Error(`Error starting container ${containerId}: ${err.message}`));
+        this.log(`Started container ${containerId} with volume ${volumeName}`);
+        resolve();
+      });
     });
-}
+  }
 
   private async removeContainer(containerId: string): Promise<void> {
     const container = docker.getContainer(containerId);
@@ -249,13 +256,30 @@ export default class Containers extends Command {
     await this.stopContainer(containerId, {});
     await this.removeContainer(containerId);
 
+    const ram = Number(Containers.flags.ram);
+    const cpuPercent = Number(Containers.flags.cpu);
+
+    const updatedHostConfig: any = {
+      PortBindings: ports,
+      Binds: Object.keys(volumes).map(volume => `${volume}:${volume}`),
+    };
+
+    if (!isNaN(ram)) {
+      updatedHostConfig.Memory = ram * 1024 * 1024;
+    }
+
+    if (!isNaN(cpuPercent)) {
+      const cpuPeriod = 1000000;
+      updatedHostConfig.CpuQuota = Math.round((cpuPeriod * cpuPercent) / 100);
+      updatedHostConfig.CpuPeriod = cpuPeriod;
+    }
+
+    this.log(`Creating container with updated settings: ${JSON.stringify(updatedHostConfig, null, 2)}`);
+
     await this.createContainer({
       Image: imageName,
       ExposedPorts: data.Config.ExposedPorts || {},
-      HostConfig: {
-        PortBindings: ports,
-        Binds: Object.keys(volumes).map(volume => `${volume}:${volume}`),
-      },
+      HostConfig: updatedHostConfig,
       Env: env,
     });
   }
@@ -294,15 +318,16 @@ export default class Containers extends Command {
       });
     });
   }
+
   private async getContainerLogs(containerId: string): Promise<void> {
     try {
       const response = await axios.get('http://localhost:3100/loki/api/v1/query_range', {
         params: {
-          query: `{logs="container_id"} == "${containerId}"`,
+          query: `{logs="container_id"} |= "${containerId}"`,
           limit: 100,
         },
       });
-  
+
       const logs = response.data.data.result;
       if (logs.length === 0) {
         this.log(`No logs found for container ${containerId}`);
