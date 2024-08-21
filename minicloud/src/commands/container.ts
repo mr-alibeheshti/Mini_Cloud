@@ -63,7 +63,7 @@ export default class Containers extends Command {
     '<%= config.bin %> <%= command.id %> ps -a',
     '<%= config.bin %> <%= command.id %> remove <container_id> -r',
     '<%= config.bin %> <%= command.id %> start <container_id>',
-    '<%= config.bin %> <%= command.id %> update <container_id>',
+    '<%= config.bin %> <%= command.id %> update <container_id> --ram 512 --cpu 50',
     '<%= config.bin %> <%= command.id %> inspect <container_id>',
     '<%= config.bin %> <%= command.id %> logs <container_id>',
   ];
@@ -88,11 +88,8 @@ export default class Containers extends Command {
           await this.handleStart(args.ContainerId, flags.volume);
           break;
         case 'update':
-          if (!args.ContainerId) {
-            await this.handleUpdateAll();
-          } else {
-            await this.handleUpdate(args.ContainerId);
-          }
+          if (!args.ContainerId) throw new Error('Container ID is required for the update operation.');
+          await this.handleUpdate(args.ContainerId, flags);
           break;
         case 'logs':
           if (!args.ContainerId) throw new Error('Container ID is required for the logs operation.');
@@ -143,17 +140,12 @@ export default class Containers extends Command {
     await this.startContainer(containerId, volume);
   }
 
-  private async handleUpdateAll(): Promise<void> {
-    this.log('Updating all containers...');
-    const containers = await this.listContainers({ all: true });
-    for (const containerInfo of containers) {
-      await this.updateContainer(containerInfo.Id);
-    }
-  }
-
-  private async handleUpdate(containerId: string): Promise<void> {
+  private async handleUpdate(containerId: string, flags: any): Promise<void> {
     this.log(`Updating container ${containerId}...`);
-    await this.updateContainer(containerId);
+    await this.updateContainer(containerId, {
+        ram: flags.ram,
+        cpu: flags.cpu,
+    });
   }
 
   private async handlePs(flags: any): Promise<void> {
@@ -242,10 +234,8 @@ export default class Containers extends Command {
     });
   }
 
-  private async updateContainer(containerId: string): Promise<void> {
-    const container = docker.getContainer(containerId);
+  private async updateContainer(containerId: string, flags: any): Promise<void> {
     const data = await this.inspectContainer(containerId);
-
     const imageName = data.Config.Image;
     const ports = data.HostConfig.PortBindings || {};
     const env = data.Config.Env || [];
@@ -256,25 +246,20 @@ export default class Containers extends Command {
     await this.stopContainer(containerId, {});
     await this.removeContainer(containerId);
 
-    const ram = Number(Containers.flags.ram);
-    const cpuPercent = Number(Containers.flags.cpu);
-
     const updatedHostConfig: any = {
-      PortBindings: ports,
       Binds: Object.keys(volumes).map(volume => `${volume}:${volume}`),
     };
 
-    if (!isNaN(ram)) {
-      updatedHostConfig.Memory = ram * 1024 * 1024;
+    if (flags.ram !== undefined) {
+      updatedHostConfig.Memory = flags.ram * 1024 * 1024; 
     }
 
-    if (!isNaN(cpuPercent)) {
+    if (flags.cpu !== undefined) {
+      const cpuPercent = flags.cpu;
       const cpuPeriod = 1000000;
       updatedHostConfig.CpuQuota = Math.round((cpuPeriod * cpuPercent) / 100);
       updatedHostConfig.CpuPeriod = cpuPeriod;
     }
-
-    this.log(`Creating container with updated settings: ${JSON.stringify(updatedHostConfig, null, 2)}`);
 
     await this.createContainer({
       Image: imageName,
