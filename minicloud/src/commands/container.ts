@@ -7,7 +7,7 @@ const docker = new Docker({ socketPath: '/var/run/docker.sock' });
 export default class Containers extends Command {
   static args = {
     Operation: Args.string({
-      description: 'Operation to perform on Docker containers (stopAll, stop, start, ps, remove, update, inspect, logs)',
+      description: 'Operation to perform on Docker containers (stopAll, stop, start, ps, remove, update, inspect, logs, stat)',
       required: true,
     }),
     ContainerId: Args.string({
@@ -66,6 +66,7 @@ export default class Containers extends Command {
     '<%= config.bin %> <%= command.id %> update <container_id> --ram 512 --cpu 50',
     '<%= config.bin %> <%= command.id %> inspect <container_id>',
     '<%= config.bin %> <%= command.id %> logs <container_id>',
+    '<%= config.bin %> <%= command.id %> stat <container_id>',
   ];
 
   async run(): Promise<void> {
@@ -96,8 +97,8 @@ export default class Containers extends Command {
           await this.getContainerLogs(args.ContainerId);
           break;
         case 'stat':
-          if (!args.ContainerId) throw new Error('Container ID is required for the logs operation.');
-          await this.getContainerStat(args.ContainerId);
+          if (!args.ContainerId) throw new Error('Container ID is required for the stat operation.');
+          await this.startLiveUpdates(args.ContainerId,5);
           break;
         case 'ps':
           await this.handlePs(flags);
@@ -111,7 +112,7 @@ export default class Containers extends Command {
           await this.handleInspect(args.ContainerId);
           break;
         default:
-          throw new Error(`Invalid operation: ${args.Operation}. Supported operations are: startAll, stopAll, stop, start, ps, remove, update, inspect, logs.`);
+          throw new Error(`Invalid operation: ${args.Operation}. Supported operations are: startAll, stopAll, stop, start, ps, remove, update, inspect, logs, stat.`);
       }
     } catch (error: any) {
       this.error(error.message);
@@ -321,6 +322,7 @@ export default class Containers extends Command {
       if (logs.length === 0) {
         this.log(`No logs found for container ${containerId}`);
       } else {
+        console.clear();  // Clear previous logs
         logs.forEach((log: any) => {
           log.values.forEach((value: any) => {
             this.log(`[${new Date(parseInt(value[0], 10) / 1000000).toISOString()}] ${value[1]}`);
@@ -332,10 +334,9 @@ export default class Containers extends Command {
     }
   }
 
-
   private async getContainerStat(containerId: string): Promise<void> {
     try {
-      const [cpuResponse, memoryResponse, maxMemoryResponse, diskResponse] = await Promise.all([
+      const [cpuResponse, memoryResponse, maxMemoryResponse, diskResponse, memoryLimitResponse] = await Promise.all([
         axios.get('http://localhost:9090/api/v1/query', {
           params: {
             query: `rate(container_cpu_usage_seconds_total{name="${containerId}"}[1m]) * 100`,
@@ -356,6 +357,11 @@ export default class Containers extends Command {
             query: `container_fs_usage_bytes{name="${containerId}"}`
           },
         }),
+        axios.get('http://localhost:9090/api/v1/query', {
+          params: {
+            query: `container_spec_memory_limit_bytes{name="${containerId}"}`
+          },
+        }),
       ]);
   
       const cpuUsage = cpuResponse.data.data.result[0]?.value[1] || '0';
@@ -370,10 +376,15 @@ export default class Containers extends Command {
       const diskUsage = diskResponse.data.data.result[0]?.value[1] || '0';
       const diskUsageMB = (parseFloat(diskUsage) / (1024 * 1024)).toFixed(2);
   
+      const memoryLimit = memoryLimitResponse.data.data.result[0]?.value[1] || '0';
+      const memoryLimitMB = (parseFloat(memoryLimit) / (1024 * 1024)).toFixed(2);
+  
+      console.clear();
       this.log(`Container: ${containerId}`);
       this.log(`CPU Usage (%): ${cpuUsagePercentage}`);
       this.log(`Memory Usage (MB): ${memoryUsageMB}`);
       this.log(`Max Memory Usage (MB): ${maxMemoryUsageMB}`);
+      this.log(`Memory Limit (MB): ${memoryLimitMB}`);
       this.log(`Disk Usage (MB): ${diskUsageMB}`);
     } catch (error: any) {
       this.error(`Error fetching stats for container ${containerId}: ${error.message}`);
@@ -381,4 +392,9 @@ export default class Containers extends Command {
   }
   
 
+  private async startLiveUpdates(containerId: string, interval: number): Promise<void> {
+    setInterval(async () => {
+      await this.getContainerStat(containerId);
+    }, interval);
+  }
 }
