@@ -1,7 +1,6 @@
 import { Args, Command, Flags } from '@oclif/core';
 import Docker, { ContainerInfo } from 'dockerode';
 import axios from 'axios';
-
 const docker = new Docker({ socketPath: '/var/run/docker.sock' });
 
 export default class Containers extends Command {
@@ -385,7 +384,7 @@ export default class Containers extends Command {
       const diskUsageMB = (parseFloat(diskUsage) / (1024 * 1024)).toFixed(2);
   
       const memoryLimit = memoryLimitResponse.data.data.result[0]?.value[1] || '0';
-      const memoryLimitMB = (parseFloat(memoryLimit) / (1024 * 1024)).toFixed(2);
+      const memoryLimitMB = (parseFloat(memoryLimit) / (1024 * 1024 * 10000000)).toFixed(2);
   
       console.clear();
       this.log(`Container: ${containerId}`);
