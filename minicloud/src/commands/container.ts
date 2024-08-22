@@ -95,6 +95,10 @@ export default class Containers extends Command {
           if (!args.ContainerId) throw new Error('Container ID is required for the logs operation.');
           await this.getContainerLogs(args.ContainerId);
           break;
+        case 'stat':
+          if (!args.ContainerId) throw new Error('Container ID is required for the logs operation.');
+          await this.getContainerStat(args.ContainerId);
+          break;
         case 'ps':
           await this.handlePs(flags);
           break;
@@ -327,4 +331,54 @@ export default class Containers extends Command {
       this.error(`Error fetching logs for container ${containerId}: ${error.message}`);
     }
   }
+
+
+  private async getContainerStat(containerId: string): Promise<void> {
+    try {
+      const [cpuResponse, memoryResponse, maxMemoryResponse, diskResponse] = await Promise.all([
+        axios.get('http://localhost:9090/api/v1/query', {
+          params: {
+            query: `rate(container_cpu_usage_seconds_total{name="${containerId}"}[1m]) * 100`,
+          },
+        }),
+        axios.get('http://localhost:9090/api/v1/query', {
+          params: {
+            query: `container_memory_usage_bytes{name="${containerId}"}`,
+          },
+        }),
+        axios.get('http://localhost:9090/api/v1/query', {
+          params: {
+            query: `container_memory_max_usage_bytes{name="${containerId}"}`,
+          },
+        }),
+        axios.get('http://localhost:9090/api/v1/query', {
+          params: {
+            query: `container_fs_usage_bytes{name="${containerId}"}`
+          },
+        }),
+      ]);
+  
+      const cpuUsage = cpuResponse.data.data.result[0]?.value[1] || '0';
+      const cpuUsagePercentage = parseFloat(cpuUsage).toFixed(6);
+  
+      const memoryUsage = memoryResponse.data.data.result[0]?.value[1] || '0';
+      const memoryUsageMB = (parseFloat(memoryUsage) / (1024 * 1024)).toFixed(2);
+  
+      const maxMemoryUsage = maxMemoryResponse.data.data.result[0]?.value[1] || '0';
+      const maxMemoryUsageMB = (parseFloat(maxMemoryUsage) / (1024 * 1024)).toFixed(2);
+  
+      const diskUsage = diskResponse.data.data.result[0]?.value[1] || '0';
+      const diskUsageMB = (parseFloat(diskUsage) / (1024 * 1024)).toFixed(2);
+  
+      this.log(`Container: ${containerId}`);
+      this.log(`CPU Usage (%): ${cpuUsagePercentage}`);
+      this.log(`Memory Usage (MB): ${memoryUsageMB}`);
+      this.log(`Max Memory Usage (MB): ${maxMemoryUsageMB}`);
+      this.log(`Disk Usage (MB): ${diskUsageMB}`);
+    } catch (error: any) {
+      this.error(`Error fetching stats for container ${containerId}: ${error.message}`);
+    }
+  }
+  
+
 }
