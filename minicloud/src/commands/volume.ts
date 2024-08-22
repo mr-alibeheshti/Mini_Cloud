@@ -126,7 +126,6 @@ export default class Volume extends Command {
       throw new Error(`Error listing volumes: ${err.message}`);
     }
   }
-
   private async checkIfVolumeInUse(volumeName: string): Promise<boolean> {
     try {
       const containers = await docker.listContainers({ all: true });

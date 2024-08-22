@@ -17,6 +17,8 @@ export default class Containers extends Command {
   };
 
   static flags = {
+    environment: Flags.string({ description: 'Environment data in format KEY=value,KEY2=value2', char: 'e' }),
+
     force: Flags.boolean({
       char: 'f',
       description: 'Force stop containers',
@@ -54,7 +56,7 @@ export default class Containers extends Command {
     }),
   };
 
-  static description = 'Run Docker operations such as stopping, removing, starting, updating, or listing containers on the server';
+  static description = 'Run Docker operations such as stopping, removing, starting, updating,logging,statting,inspecting or listing containers on the server';
 
   static examples = [
     '<%= config.bin %> <%= command.id %> stopAll',
@@ -122,8 +124,8 @@ export default class Containers extends Command {
   private async handleStartAll(): Promise<void> {
     this.log('Starting all containers...');
     const containers = await this.listContainers({ all: true });
-    for (const containerInfo of containers) {
-      await this.startContainer(containerInfo.Id);
+    for (const t of containers) {
+      await this.startContainer(t.Id);
     }
   }
 
@@ -204,13 +206,17 @@ export default class Containers extends Command {
       });
     });
   }
-
   private async startContainer(containerId: string, volumeName?: string): Promise<void> {
     const container = docker.getContainer(containerId);
     const data = await this.inspectContainer(containerId);
-
+  
+    if (data.State.Running) {
+      this.log(`Container ${containerId} is already running.`);
+      return;
+    }
+  
     const binds = volumeName ? [`${volumeName}:${data.Config.WorkingDir || '/app'}`] : [];
-
+  
     if (binds.length > 0) {
       await container.update({
         HostConfig: {
@@ -218,7 +224,7 @@ export default class Containers extends Command {
         }
       });
     }
-
+  
     return new Promise((resolve, reject) => {
       container.start((err: any) => {
         if (err) return reject(new Error(`Error starting container ${containerId}: ${err.message}`));
@@ -227,11 +233,11 @@ export default class Containers extends Command {
       });
     });
   }
-
+  
   private async removeContainer(containerId: string): Promise<void> {
     const container = docker.getContainer(containerId);
     return new Promise((resolve, reject) => {
-      container.remove({ force: true }, (removeErr: any) => {
+      container.remove({ force: !!Containers.flags.force || false }, (removeErr: any) => {
         if (removeErr) return reject(new Error(`Error removing container ${containerId}: ${removeErr.message}`));
         this.log(`Removed container ${containerId}`);
         resolve();
@@ -241,6 +247,7 @@ export default class Containers extends Command {
 
   private async updateContainer(containerId: string, flags: any): Promise<void> {
     const data = await this.inspectContainer(containerId);
+    const envArray = flags.environment ? flags.environment.split(',').map((env:any) => env.trim()) : [];
     const imageName = data.Config.Image;
     const ports = data.HostConfig.PortBindings || {};
     const env = data.Config.Env || [];
@@ -270,7 +277,7 @@ export default class Containers extends Command {
       Image: imageName,
       ExposedPorts: data.Config.ExposedPorts || {},
       HostConfig: updatedHostConfig,
-      Env: env,
+      Env: envArray,
     });
   }
 
@@ -322,10 +329,11 @@ export default class Containers extends Command {
       if (logs.length === 0) {
         this.log(`No logs found for container ${containerId}`);
       } else {
-        console.clear();  // Clear previous logs
+        console.clear();
         logs.forEach((log: any) => {
           log.values.forEach((value: any) => {
-            this.log(`[${new Date(parseInt(value[0], 10) / 1000000).toISOString()}] ${value[1]}`);
+          this.log("")
+          this.log(`[${new Date(parseInt(value[0], 10) / 1000000).toISOString()}] ${value[1]}`);
           });
         });
       }
@@ -391,7 +399,6 @@ export default class Containers extends Command {
     }
   }
   
-
   private async startLiveUpdates(containerId: string, interval: number): Promise<void> {
     setInterval(async () => {
       await this.getContainerStat(containerId);
