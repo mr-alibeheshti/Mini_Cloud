@@ -1,5 +1,5 @@
 import { Args, Command, Flags } from '@oclif/core';
-import Docker, { ContainerInfo } from 'dockerode';
+import Docker, { Container, ContainerInfo } from 'dockerode';
 import axios from 'axios';
 const docker = new Docker({ socketPath: '/var/run/docker.sock' });
 
@@ -76,20 +76,39 @@ export default class Containers extends Command {
     try {
       switch (args.Operation) {
         case 'startAll':
-          await this.handleStartAll();
-          break;
+          try{
+          const response = await axios.post("http://127.0.0.1:3500/api/v1/container/start-all");
+          console.log('Response data:', response.data);
+        } catch (error:any  ) {
+          console.error('Error occurred:', error.message.message);
+        }   
+        break;
         case 'stopAll':
-          await this.handleStopAll(flags);
-          break;
+          try{
+            const response = await axios.post("http://127.0.0.1:3500/api/v1/container/stop-all");
+            console.log('Response data:', response.data);
+          } catch (error:any  ) {
+            console.error('Error occurred:', error.message.message);
+          }             break;
         case 'stop':
           if (!args.ContainerId) throw new Error('Container ID is required for the stop operation.');
-          await this.handleStop(args.ContainerId, flags);
-          break;
-        case 'start':
-          if (!args.ContainerId) throw new Error('Container ID is required for the start operation.');
-          await this.handleStart(args.ContainerId, flags.volume);
-          break;
-        case 'update':
+          try {
+            const response = await axios.post(`http://127.0.0.1:3500/api/v1/container/stop/${args.ContainerId}`);
+            console.log('Response data:', response.data.message);
+          } catch (error: any) {
+            console.error('Error occurred:', error.message);
+          }
+        break;
+          case 'start':
+            if (!args.ContainerId) throw new Error('Container ID is required for the start operation.');
+            try {
+              const response = await axios.post(`http://127.0.0.1:3500/api/v1/container/start/${args.ContainerId}`);
+              console.log('Response data:', response.data.message);
+            } catch (error: any) {
+              console.error('Error occurred:', error.message);
+            }
+            break;
+          case 'update':
           if (!args.ContainerId) throw new Error('Container ID is required for the update operation.');
           await this.handleUpdate(args.ContainerId, flags);
           break;
@@ -102,16 +121,28 @@ export default class Containers extends Command {
           await this.startLiveUpdates(args.ContainerId,5);
           break;
         case 'ps':
-          await this.handlePs(flags);
+          try{
+            const response = await axios.post(`http://127.0.0.1:3500/api/v1/container/ps/${flags.all ? '?all=true' : ''}`);
+            console.log('Response data:', response.data.results);
+          } catch (error:any  ) {
+            console.error('Error occurred:', error.message.message);
+          }
           break;
         case 'remove':
           if (!args.ContainerId) throw new Error('Container ID is required for the remove operation.');
           await this.handleRemove(args.ContainerId);
           break;
-        case 'inspect':
-          if (!args.ContainerId) throw new Error('Container ID is required for the inspect operation.');
-          await this.handleInspect(args.ContainerId);
-          break;
+          case 'inspect':
+            if (!args.ContainerId) throw new Error('Container ID is required for the inspect operation.');
+            try {
+              const response = await axios.post(`http://127.0.0.1:3500/api/v1/container/inspect/${args.ContainerId}`);
+              console.log('Response data:', response.data.results);
+            } catch (error: any) {
+              console.error('Error occurred:', error.message);
+            }
+            await this.handleInspect(args.ContainerId);
+            break;
+  
         default:
           throw new Error(`Invalid operation: ${args.Operation}. Supported operations are: startAll, stopAll, stop, start, ps, remove, update, inspect, logs, stat.`);
       }
