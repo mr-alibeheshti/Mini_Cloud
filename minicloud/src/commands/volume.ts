@@ -1,12 +1,12 @@
 import { Args, Command, Flags } from '@oclif/core';
 import Docker from 'dockerode';
-
+import axios from 'axios';
 const docker = new Docker({ socketPath: '/var/run/docker.sock' });
 
 export default class Volume extends Command {
   static args = {
     Operation: Args.string({
-      description: 'Operation to perform on Docker volumes (add, remove, removeAll, ps, inspect)',
+      description: 'Operation to perform on Docker volumes (add, remove, ps, inspect)',
       required: true,
     }),
     name: Args.string({ description: 'Name of Docker Volume or Container ID (for inspect)' }),
@@ -35,26 +35,34 @@ export default class Volume extends Command {
           if (!args.name) {
             throw new Error("Volume name is required for 'add' operation.");
           }
-          await this.createVolume(args.name, flags.mountPoint);
+          try{
+            const response = await axios.post(`http://127.0.0.1:3500/api/v1/volume/add/${args.name}/${flags.mountPoint ? `?mountPoint=${flags.mountPoint}` : ""}`)
+            console.log('Response data:', response.data);
+        } catch (error: any) {
+          console.error('Error occurred:', error.message);
+        }
           break;
         case 'remove':
           if (!args.name) {
-            throw new Error("Volume name is required for 'remove' operation.");
+            throw new Error("Volume name is required for 'add' operation.");
           }
-          await this.removeVolume(args.name);
-          break;
-        case 'removeAll':
-          await this.removeAllVolumes();
+          const response = await axios.post(`http://127.0.0.1:3500/api/v1/volume/remove/${args.name}/`)
+          console.log('Response data:', response.data);
           break;
         case 'ps':
-          await this.listVolumes();
-          break;
+          const ps = await axios.get(`http://127.0.0.1:3500/api/v1/volume/ps`)
+          console.log('Response data:', ps.data);
+            break;
         case 'inspect':
           if (!args.name) {
             throw new Error("Volume name is required for 'inspect' operation.");
           }
-          await this.inspectVolume(args.name);
-          break;
+          try{
+            const response = await axios.get(`http://127.0.0.1:3500/api/v1/volume/inspect/${args.name}`)
+            console.log('Response data:', response.data);
+        } catch (error: any) {
+          console.error('Error occurred:', error.message);
+        }          break;
         default:
           this.error(`Invalid operation: ${args.Operation}. Supported operations are: add, remove, removeAll, ps, inspect.`);
       }
@@ -63,51 +71,6 @@ export default class Volume extends Command {
     }
   }
 
-  private async createVolume(volumeName: string, mountPoint?: string, driver: string = 'local'): Promise<void> {
-    const volumeConfig: Docker.VolumeCreateOptions = {
-      Name: volumeName,
-      Driver: driver,
-      DriverOpts: driver === 'local' && mountPoint ? {
-        type: 'volume',
-        o: `bind`,
-        device: mountPoint,
-      } : undefined,
-    };
-  
-    try {
-      await docker.createVolume(volumeConfig);
-      this.log(`Created volume ${volumeName}`);
-    } catch (err: any) {
-      throw new Error(`Error creating volume ${volumeName}: ${err.message}`);
-    }
-  }
-  
-
-  private async removeVolume(volumeName: string): Promise<void> {
-    try {
-      await docker.getVolume(volumeName).remove();
-      this.log(`Removed volume ${volumeName}`);
-    } catch (err: any) {
-      throw new Error(`Error removing volume ${volumeName}: ${err.message}`);
-    }
-  }
-
-  private async removeAllVolumes(): Promise<void> {
-    try {
-      const volumes = await this.listVolumes();
-      for (const volume of volumes) {
-        const isInUse = await this.checkIfVolumeInUse(volume.Name);
-        if (!isInUse) {
-          await this.removeVolume(volume.Name);
-        } else {
-          this.log(`Volume ${volume.Name} is in use and cannot be removed.`);
-        }
-      }
-      this.log('Removed all unused volumes');
-    } catch (err: any) {
-      this.error(`Error removing all volumes: ${err.message}`);
-    }
-  }
 
   private async listVolumes(): Promise<Docker.VolumeInspectInfo[]> {
     try {
@@ -126,16 +89,7 @@ export default class Volume extends Command {
       throw new Error(`Error listing volumes: ${err.message}`);
     }
   }
-  private async checkIfVolumeInUse(volumeName: string): Promise<boolean> {
-    try {
-      const containers = await docker.listContainers({ all: true });
-      return containers.some(container =>
-        container.Mounts.some(mount => mount.Name === volumeName)
-      );
-    } catch (err: any) {
-      throw new Error(`Error checking if volume is in use: ${err.message}`);
-    }
-  }
+
 
   private async inspectVolume(volumeName: string): Promise<void> {
     try {

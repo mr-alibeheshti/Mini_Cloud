@@ -2,7 +2,7 @@ const Docker = require('dockerode');
 const axios = require('axios');
 const docker = new Docker({ socketPath: '/var/run/docker.sock' });
 
-class DockerController {
+class ContainerController {
   constructor() {
     this.docker = docker;
   }
@@ -377,4 +377,4 @@ class DockerController {
 
 }
 
-module.exports = DockerController;
+module.exports = ContainerController;
