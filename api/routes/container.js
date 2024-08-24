@@ -10,9 +10,9 @@ router.post('/ps/', (req, res, next) => dockerController.ps(req, res, next));
 router.post('/inspect/:containerId', (req, res, next) => dockerController.inspect(req, res, next));
 router.post('/start/:containerId', (req, res, next) => dockerController.start(req, res, next));
 router.post('/stop/:containerId', (req, res, next) => dockerController.stop(req, res, next));
-
-
-
-
+router.post('/remove/:containerId', (req, res, next) => dockerController.remove(req, res, next));
+router.post('/update/:containerId', (req, res, next) => dockerController.update(req, res, next));
+router.post('/log/:containerId', (req, res, next) => dockerController.log(req, res, next));
+router.post('/stat/:containerId', (req, res, next) => dockerController.stat(req, res, next));
 
 module.exports = router;
