@@ -6,11 +6,7 @@ const containerController = new ContainerController();
 
 router.post('/start-all', (req, res, next) => containerController.startAll(req, res, next));
 router.post('/stop-all', (req, res, next) => containerController.stopAll(req, res, next));
-<<<<<<< HEAD
 router.get('/ps', (req, res, next) => containerController.ps(req, res, next));
-=======
-router.post('/ps/', (req, res, next) => containerController.ps(req, res, next));
->>>>>>> bfe2b53ca8a6e45b09f897a71f187187ac4afc2f
 router.post('/inspect/:containerId', (req, res, next) => containerController.inspect(req, res, next));
 router.post('/start/:containerId', (req, res, next) => containerController.start(req, res, next));
 router.post('/stop/:containerId', (req, res, next) => containerController.stop(req, res, next));
