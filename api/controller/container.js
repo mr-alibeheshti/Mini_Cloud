@@ -7,6 +7,7 @@ class ContainerController {
     this.docker = docker;
   }
 
+<<<<<<< HEAD
   async run(req, res, next) {
     try {
       const imageName = req.params.imageName;
@@ -60,6 +61,8 @@ class ContainerController {
     }
   }
 
+=======
+>>>>>>> bfe2b53ca8a6e45b09f897a71f187187ac4afc2f
   async log(req, res, next) {
     try {
       const containerId = req.params.containerId;
@@ -296,33 +299,119 @@ class ContainerController {
       docker.pull(imageName, (pullErr, stream) => {
         if (pullErr) return reject(new Error(`Error pulling image ${imageName}: ${pullErr.message}`));
         docker.modem.followProgress(stream, (progressErr) => {
+<<<<<<< HEAD
           if (progressErr) return reject(new Error(`Error pulling image ${imageName}: ${progressErr.message}`));
+=======
+          if (progressErr) return reject(new Error(`Error updating image ${imageName}: ${progressErr.message}`));
+>>>>>>> bfe2b53ca8a6e45b09f897a71f187187ac4afc2f
           resolve();
         });
       });
     });
   }
 
+<<<<<<< HEAD
   async inspectContainer(containerId) {
     return new Promise((resolve, reject) => {
       const container = docker.getContainer(containerId);
       container.inspect((err, data) => {
         if (err) return reject(err);
         resolve(data);
+=======
+  async listContainers(options) {
+    try {
+      const containers = await this.docker.listContainers(options);
+      return containers;
+    } catch (err) {
+      throw new Error(`Error listing containers: ${err.message}`);
+    }
+  }
+
+  async removeContainer(containerId, isForce) {
+    const container = docker.getContainer(containerId);
+    return new Promise((resolve, reject) => {
+      container.remove({ force: isForce }, (removeErr) => {
+        if (removeErr) return reject(new Error(`Error removing container ${containerId}: ${removeErr.message}`));
+        this.log(`Removed container ${containerId}`);
+        resolve();
+>>>>>>> bfe2b53ca8a6e45b09f897a71f187187ac4afc2f
       });
     });
   }
 
+<<<<<<< HEAD
   async stopContainer(containerId) {
     return new Promise((resolve, reject) => {
       const container = docker.getContainer(containerId);
       container.stop((err) => {
         if (err) return reject(err);
         resolve({ message: 'Container stopped' });
+=======
+  async inspectContainer(containerId) {
+    try {
+      const container = this.docker.getContainer(containerId);
+      return await container.inspect();
+    } catch (err) {
+      throw new Error(`Error inspecting container ${containerId}: ${err.message}`);
+    }
+  }
+
+  async startContainer(containerId, volumeName) {
+    try {
+      const container = this.docker.getContainer(containerId);
+      const data = await this.inspectContainer(containerId);
+
+      if (data.State.Running) {
+        this.log(`Container ${containerId} is already running.`);
+        return;
+      }
+
+      const binds = volumeName ? [`${volumeName}:${data.Config.WorkingDir || '/app'}`] : [];
+
+      if (binds.length > 0) {
+        await container.update({
+          HostConfig: {
+            Binds: binds
+          }
+        });
+      }
+
+      await new Promise((resolve, reject) => {
+        container.start((err) => {
+          if (err) return reject(new Error(`Error starting container ${containerId}: ${err.message}`));
+          this.log(`Started container ${containerId} with volume ${volumeName}`);
+          resolve();
+        });
+      });
+    } catch (err) {
+      throw new Error(`Error in startContainer: ${err.message}`);
+    }
+  }
+
+  async stopContainer(containerId) {
+    const container = docker.getContainer(containerId);
+    return new Promise((resolve, reject) => {
+      container.stop((stopErr) => {
+        if (stopErr && stopErr.statusCode !== 304) {
+          return reject(new Error(`Error stopping container ${containerId}: ${stopErr.message}`));
+        }
+        if (stopErr && stopErr.statusCode === 304) {
+          this.log(`Container ${containerId} is already stopped, attempting to force stop...`);
+          container.kill((killErr) => {
+            if (killErr) return reject(new Error(`Error force stopping container ${containerId}: ${killErr.message}`));
+            this.log(`Force stopped container ${containerId}`);
+            resolve();
+          });
+        } else {
+          this.log(`Stopped container ${containerId}`);
+          resolve();
+        }
+>>>>>>> bfe2b53ca8a6e45b09f897a71f187187ac4afc2f
       });
     });
   }
 
+<<<<<<< HEAD
   async removeContainer(containerId, isForce = false) {
     return new Promise((resolve, reject) => {
       const container = docker.getContainer(containerId);
@@ -351,6 +440,50 @@ class ContainerController {
       });
     });
   }
+=======
+  async getContainerStat(containerId) {
+    try {
+      const [cpuResponse, memoryResponse, maxMemoryResponse, diskResponse, memoryLimitResponse] = await Promise.all([
+        axios.get('http://localhost:9090/api/v1/query', {
+          params: {
+            query: `rate(container_cpu_usage_seconds_total{name="${containerId}"}[1m]) * 100`,
+          },
+        }),
+        axios.get('http://localhost:9090/api/v1/query', {
+          params: {
+            query: `container_memory_usage_bytes{name="${containerId}"}`,
+          },
+        }),
+        axios.get('http://localhost:9090/api/v1/query', {
+          params: {
+            query: `container_memory_max_usage_bytes{name="${containerId}"}`,
+          },
+        }),
+        axios.get('http://localhost:9090/api/v1/query', {
+          params: {
+            query: `container_fs_usage_bytes{name="${containerId}"}`
+          },
+        }),
+        axios.get('http://localhost:9090/api/v1/query', {
+          params: {
+            query: `container_spec_memory_limit_bytes{name="${containerId}"}`
+          },
+        }),
+      ]);
+
+      return {
+        cpuUsagePercentage: parseFloat(cpuResponse.data.data.result[0]?.value[1] || '0').toFixed(6),
+        memoryUsageMB: (parseFloat(memoryResponse.data.data.result[0]?.value[1] || '0') / (1024 * 1024)).toFixed(2),
+        maxMemoryUsageMB: (parseFloat(maxMemoryResponse.data.data.result[0]?.value[1] || '0') / (1024 * 1024)).toFixed(2),
+        diskUsageMB: (parseFloat(diskResponse.data.data.result[0]?.value[1] || '0') / (1024 * 1024)).toFixed(2),
+        memoryLimitMB: (parseFloat(memoryLimitResponse.data.data.result[0]?.value[1] || '0') / (1024 * 1024 * 10000000)).toFixed(2),
+      };
+    } catch (error) {
+      throw new Error(`Error fetching stats for container ${containerId}: ${error.message}`);
+    }
+  }
+
+>>>>>>> bfe2b53ca8a6e45b09f897a71f187187ac4afc2f
 }
 
 module.exports = ContainerController;

@@ -22,7 +22,11 @@ services:
       - default
 
   fluentd:
+<<<<<<< HEAD
     image: my-fluentd
+=======
+    image: my-fluentd-image
+>>>>>>> bfe2b53ca8a6e45b09f897a71f187187ac4afc2f
     command: ["fluentd", "-c", "/fluentd/etc/fluent.conf"]
     volumes:
       - ./logging/fluentd/:/fluentd/etc
@@ -55,7 +59,11 @@ services:
       - default
 
   cadvisor:
+<<<<<<< HEAD
     image: abeheshti127/cadvisor
+=======
+    image: gcr.io/cadvisor/cadvisor:latest
+>>>>>>> bfe2b53ca8a6e45b09f897a71f187187ac4afc2f
     container_name: cadvisor
     ports:
       - 8080:8080
