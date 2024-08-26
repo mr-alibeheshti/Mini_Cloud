@@ -1,5 +1,6 @@
-import BaseCommand from '../../baseCommand';
 import axios from 'axios';
+
+import BaseCommand from '../../base-command';
 
 export default class StartAll extends BaseCommand {
   static description = 'Start all Docker containers';

@@ -65,7 +65,7 @@
   "repository": "test/minicloud",
   "scripts": {
     "build": "shx rm -rf dist && tsc -b --watch",
-    "lint": "eslint . --ext .ts",
+    "lint": "eslint . --ext .ts --fix",
     "postpack": "shx rm -f oclif.manifest.json",
     "posttest": "npm run lint",
     "prepack": "oclif manifest && oclif readme",

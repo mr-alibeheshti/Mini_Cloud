@@ -53,15 +53,12 @@ class RunController {
           if (err) {
             return reject(err);
           }
-          docker.modem.followProgress(stream, (err) => {
             if (err) {
               return reject(err);
             }
             resolve();
-          });
         });
       });
-
       const container = await docker.createContainer({
         Image: imageName,
         ExposedPorts: { [`${containerPort}/tcp`]: {} },

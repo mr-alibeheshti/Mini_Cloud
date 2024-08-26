@@ -1,19 +1,10 @@
 import { Args, Command, Flags } from '@oclif/core';
 import axios from 'axios';
-import BaseCommand from '../baseCommand';
+
+import BaseCommand from '../base-command';
 export default class Run extends BaseCommand {
   static args = {
     Image: Args.string({ description: 'Name of Docker Image in Docker Hub', required: true }),
-  };
-
-  static flags = {
-    port: Flags.string({ description: 'Port of Host:Container', required: true, char: 'p' }),
-    connectionType: Flags.string({ description: 'UDP/TCP, default: TCP', default: 'tcp', char: 't' }),
-    name: Flags.string({ description: 'Custom name of Container', char: 'n' }),
-    environment: Flags.string({ description: 'Environment data in format KEY=value,KEY2=value2', char: 'e' }),
-    volume: Flags.string({ description: 'Volume mapping in format hostPath:containerPath', char: 'v',required: false }),
-    ram: Flags.integer({ description: 'Memory limit for the container in MB', char: 'r' }),
-    cpu: Flags.integer({ description: 'CPU quota for the container as a percentage', char: 'c' }),
   };
 
   static description = 'Run your Docker image from Docker Hub on the server';
@@ -21,6 +12,16 @@ export default class Run extends BaseCommand {
   static examples = [
     `<%= config.bin %> <%= command.id %> -p 80:80 -t tcp -n myContainer -r 640 -c 70 -v /host/path:/container/path httpd`,
   ];
+
+  static flags = {
+    connectionType: Flags.string({ char: 't', default: 'tcp', description: 'UDP/TCP, default: TCP' }),
+    cpu: Flags.integer({ char: 'c', description: 'CPU quota for the container as a percentage' }),
+    environment: Flags.string({ char: 'e', description: 'Environment data in format KEY=value,KEY2=value2' }),
+    name: Flags.string({ char: 'n', description: 'Custom name of Container' }),
+    port: Flags.string({ char: 'p', description: 'Port of Host:Container', required: true }),
+    ram: Flags.integer({ char: 'r', description: 'Memory limit for the container in MB' }),
+    volume: Flags.string({ char: 'v', description: 'Volume mapping in format hostPath:containerPath',required: false }),
+  };
 
   async run(): Promise<void> {
     const { args, flags } = await this.parse(Run);

@@ -1,6 +1,7 @@
 import { Args } from '@oclif/core';
 import axios from 'axios';
-import BaseCommand from '../../baseCommand';
+
+import BaseCommand from '../../base-command';
 
 export default class InspectVolume extends BaseCommand {
   static args = {

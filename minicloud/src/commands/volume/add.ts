@@ -1,17 +1,17 @@
 import { Args, Flags } from '@oclif/core';
 import axios from 'axios';
-import BaseCommand from '../../baseCommand';
+import BaseCommand from '../../base-command';
 
 export default class AddVolume extends BaseCommand {
   static args = {
     name: Args.string({ description: 'Name of Docker Volume', required: true }),
   };
 
-  static flags = {
-    mountPoint: Flags.string({ description: 'Storage location for volume', char: 'm' }),
-  };
-
   static description = 'Add a new Docker volume';
+
+  static flags = {
+    mountPoint: Flags.string({ char: 'm', description: 'Storage location for volume' }),
+  };
 
   async run(): Promise<void> {
     const { args, flags } = await this.parse(AddVolume);

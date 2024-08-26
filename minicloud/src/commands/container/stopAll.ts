@@ -1,5 +1,6 @@
-import BaseCommand from '../../baseCommand';
 import axios from 'axios';
+
+import BaseCommand from '../../base-command';
 
 export default class StopAll extends BaseCommand {
   static description = 'Stop all Docker containers';

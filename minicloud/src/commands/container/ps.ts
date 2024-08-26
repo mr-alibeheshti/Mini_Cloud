@@ -1,13 +1,14 @@
 import { Flags } from '@oclif/core';
 import axios from 'axios';
-import BaseCommand from '../../baseCommand';
+
+import BaseCommand from '../../base-command';
 
 export default class Ps extends BaseCommand {
+  static description = 'List Docker containers';
+
   static flags = {
     all: Flags.boolean({ char: 'a', description: 'List all containers including stopped ones', required: false }),
   };
-
-  static description = 'List Docker containers';
 
   async run(): Promise<void> {
     const { flags } = await this.parse(Ps);
