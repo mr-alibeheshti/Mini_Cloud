@@ -1,7 +1,7 @@
 import { Args, Command, Flags } from '@oclif/core';
 import axios from 'axios';
-
-export default class Run extends Command {
+import BaseCommand from '../baseCommand';
+export default class Run extends BaseCommand {
   static args = {
     Image: Args.string({ description: 'Name of Docker Image in Docker Hub', required: true }),
   };
@@ -42,12 +42,7 @@ export default class Run extends Command {
       );      
       this.log('Response data:', response.data);
     } catch (error: any) {
-      if (error.response && error.response.data && error.response.data.error) {
-        const errorMessage = error.response.data.error;
-        this.log('Error message:', errorMessage);
-      } else {
-        this.log('Error:', error.message);
-      }
+        this.handleError(error);
+      } 
     }
   }
-}
