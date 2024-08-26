@@ -11,7 +11,7 @@ export default class Run extends Command {
     connectionType: Flags.string({ description: 'UDP/TCP, default: TCP', default: 'tcp', char: 't' }),
     name: Flags.string({ description: 'Custom name of Container', char: 'n' }),
     environment: Flags.string({ description: 'Environment data in format KEY=value,KEY2=value2', char: 'e' }),
-    volume: Flags.string({ description: 'Volume mapping in format hostPath:containerPath', char: 'v' }),
+    volume: Flags.string({ description: 'Volume mapping in format hostPath:containerPath', char: 'v',required: false }),
     ram: Flags.integer({ description: 'Memory limit for the container in MB', char: 'r' }),
     cpu: Flags.integer({ description: 'CPU quota for the container as a percentage', char: 'c' }),
   };
@@ -33,7 +33,13 @@ export default class Run extends Command {
     const [hostPort, containerPort] = flags.port.split(':');
 
     try {
-      const response = await axios.post(`http://127.0.0.1:3500/api/v1/run?imageName=${args.Image}&hostPort=${hostPort}&containerPort=${containerPort}&cpu=${flags.cpu}&volume=${flags.volume}&environment=${flags.environment}&memory=${flags.ram}`);
+      const response = await axios.post(
+        `http://127.0.0.1:3500/api/v1/run?imageName=${args.Image}&hostPort=${hostPort}&containerPort=${containerPort}` +
+        `${flags.cpu ? `&cpu=${flags.cpu}` : ''}` +
+        `${flags.ram ? `&memory=${flags.ram}` : ''}` +
+        `${flags.volume ? `&volume=${flags.volume}` : ''}` +
+        `${flags.environment ? `&environment=${flags.environment}` : ''}`
+      );      
       this.log('Response data:', response.data);
     } catch (error: any) {
       if (error.response && error.response.data && error.response.data.error) {
