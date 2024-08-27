@@ -68,6 +68,12 @@ class RunController {
           CpuPeriod: cpuPeriod,
           Binds: volumeBindings,
           Memory: memoryBytes,
+          LogConfig: {
+            Type: 'fluentd',
+            Config: {
+              'fluentd-address': 'localhost:24224',
+            }
+          }
         },
         Env: query.environment ? query.environment.split(',').map((env) => env.trim()) : [],
       });
