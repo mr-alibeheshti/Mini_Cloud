@@ -12,14 +12,18 @@
     "@oclif/plugin-help": "^6",
     "@oclif/plugin-plugins": "^5",
     "axios": "^1.7.4",
+    "child_process": "^1.0.2",
     "dockerode": "^4.0.2",
-    "express": "^4.19.2"
+    "express": "^4.19.2",
+    "fs-extra": "^11.2.0",
+    "util": "^0.12.5"
   },
   "devDependencies": {
     "@oclif/prettier-config": "^0.2.1",
     "@oclif/test": "^4",
     "@types/chai": "^4",
     "@types/dockerode": "^3.3.31",
+    "@types/fs-extra": "^11.0.4",
     "@types/mocha": "^10",
     "@types/node": "^18",
     "chai": "^4",

@@ -1,5 +1,7 @@
 const Docker = require('dockerode');
 const axios = require('axios');
+const fs = require('fs/promises');
+const { execSync } = require('child_process');
 const docker = new Docker({ socketPath: '/var/run/docker.sock' });
 
 class ContainerController {
@@ -9,8 +11,8 @@ class ContainerController {
 
   async run(req, res, next) {
     try {
-      const { imageName, hostPort, containerPort, cpu, volume, environment, memory } = req.query;
-      
+      const { imageName, hostPort, containerPort, cpu, volume, environment, memory, domain } = req.query;
+
       if (!imageName) {
         return res.status(400).send({ error: 'Image name is required.' });
       }
@@ -20,14 +22,14 @@ class ContainerController {
       }
 
       const query = { cpu, volume, environment, memory };
-      const data = await this.runContainer(imageName, hostPort, containerPort, query);
+      const data = await this.runContainer(imageName, hostPort, containerPort, domain, query);
       res.send(data);
     } catch (err) {
       res.status(500).send({ error: err.message });
     }
   }
 
-  async runContainer(imageName, hostPort, containerPort, query) {
+  async runContainer(imageName, hostPort, containerPort, domain, query) {
     const ports = [hostPort, containerPort];
     if (!ports || ports.length !== 2) {
       throw new Error('Invalid or missing port format. Use the format host:container, e.g., 8080:80.');
@@ -54,6 +56,7 @@ class ContainerController {
           if (err) {
             return reject(err);
           }
+
           docker.modem.followProgress(stream, (err) => {
             if (err) {
               return reject(err);
@@ -62,6 +65,38 @@ class ContainerController {
           });
         });
       });
+
+      if (domain) {
+        const hostsFilePath = '/etc/hosts';
+        const domainEntry = `127.0.0.1 ${domain}`;
+        await fs.appendFile(hostsFilePath, `\n${domainEntry}`);
+        console.log(`Domain ${domain} added to ${hostsFilePath}`);
+
+        const nginxConfig = `
+server {
+    listen 80;
+    server_name ${domain};
+
+    location / {
+        proxy_pass http://127.0.0.1:${hostPort};
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}`;
+
+        const nginxConfigPath = `/etc/nginx/sites-available/${domain}`;
+        const nginxConfigLink = `/etc/nginx/sites-enabled/${domain}`;
+
+        await fs.writeFile(nginxConfigPath, nginxConfig);
+        console.log(`Nginx configuration for ${domain} created at ${nginxConfigPath}`);
+
+        // Enable site in Nginx
+        await fs.symlink(nginxConfigPath, nginxConfigLink);
+        execSync('nginx -s reload');
+        console.log(`Nginx reloaded and ${domain} is now active`);
+      }
 
       const container = await docker.createContainer({
         Image: imageName,
@@ -235,7 +270,7 @@ class ContainerController {
       for (const container of containers) {
         try {
           await this.stopContainer(container.Id);
-          results.push({ containerId: container.Id, status: 'Stopped' });
+          results.push({ containerId: container.Id, status: 'stopped' });
         } catch (err) {
           results.push({
             containerId: container.Id,
