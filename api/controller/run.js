@@ -66,74 +66,74 @@ class RunController {
         });
       });
 
-      if (domain) {
-        domain = `${domain}.minicloud.local`;
+        if (domain) {
+          domain = `${domain}.minicloud.local`;
 
-        console.log("Processing domain:", domain);
+          console.log("Processing domain:", domain);
 
-        const hostsFilePath = '/etc/hosts';
-        const domainEntry = `127.0.0.1 ${domain}`;
+          const hostsFilePath = '/etc/hosts';
+          const domainEntry = `127.0.0.1 ${domain}`;
 
-        try {
-          const hostsFileContent = await fs.readFile(hostsFilePath, 'utf8');
-          if (hostsFileContent.includes(domainEntry)) {
-            console.log(`Domain ${domain} already exists in ${hostsFilePath}. Skipping deployment.`);
-            return { message: `Domain ${domain} already exists. Deployment skipped.` };
+          try {
+            const hostsFileContent = await fs.readFile(hostsFilePath, 'utf8');
+            if (hostsFileContent.includes(domainEntry)) {
+              console.log(`Domain ${domain} already exists in ${hostsFilePath}. Skipping deployment.`);
+              return { message: `Domain ${domain} already exists. Deployment skipped.` };
+            }
+
+            await fs.appendFile(hostsFilePath, `\n${domainEntry}`);
+            console.log(`Domain ${domain} added to ${hostsFilePath}`);
+          } catch (err) {
+            console.error(`Failed to add domain to ${hostsFilePath}:`, err.message);
+            throw new Error(`Failed to add domain to ${hostsFilePath}: ${err.message}`);
           }
 
-          await fs.appendFile(hostsFilePath, `\n${domainEntry}`);
-          console.log(`Domain ${domain} added to ${hostsFilePath}`);
-        } catch (err) {
-          console.error(`Failed to add domain to ${hostsFilePath}:`, err.message);
-          throw new Error(`Failed to add domain to ${hostsFilePath}: ${err.message}`);
-        }
+          const nginxConfig = `
+            server {
+                listen 80;
+                server_name ${domain};
 
-        const nginxConfig = `
-          server {
-              listen 80;
-              server_name ${domain};
+                location / {
+                    proxy_pass http://localhost:${hostPort}; 
+                    proxy_set_header Host $host;
+                    proxy_set_header X-Real-IP $remote_addr;
+                    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                    proxy_set_header X-Forwarded-Proto $scheme;
+                }
+            }`;
 
-              location / {
-                  proxy_pass http://localhost:${hostPort}; 
-                  proxy_set_header Host $host;
-                  proxy_set_header X-Real-IP $remote_addr;
-                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                  proxy_set_header X-Forwarded-Proto $scheme;
-              }
-          }`;
+          const nginxAvailablePath = '/etc/nginx/sites-available';
+          const nginxEnabledPath = '/etc/nginx/sites-enabled';
 
-        const nginxAvailablePath = '/etc/nginx/sites-available';
-        const nginxEnabledPath = '/etc/nginx/sites-enabled';
+          await fs.ensureDir(nginxAvailablePath);
+          await fs.ensureDir(nginxEnabledPath);
 
-        await fs.ensureDir(nginxAvailablePath);
-        await fs.ensureDir(nginxEnabledPath);
+          const nginxConfigPath = path.join(nginxAvailablePath, domain);
+          const nginxConfigLink = path.join(nginxEnabledPath, domain);
 
-        const nginxConfigPath = path.join(nginxAvailablePath, domain);
-        const nginxConfigLink = path.join(nginxEnabledPath, domain);
+          try {
+            if (fs.existsSync(nginxConfigLink)) {
+              await fs.unlink(nginxConfigLink);
+            }
 
-        try {
-          if (fs.existsSync(nginxConfigLink)) {
-            await fs.unlink(nginxConfigLink);
+            await fs.writeFile(nginxConfigPath, nginxConfig);
+            console.log(`Nginx configuration for ${domain} created at ${nginxConfigPath}`);
+
+            await fs.symlink(nginxConfigPath, nginxConfigLink);
+            console.log(`Nginx configuration symlink created at ${nginxConfigLink}`);
+
+            execSync('sudo nginx -t');
+            execSync('sudo nginx -s reload');
+            console.log(`Nginx reloaded and ${domain} is now active`);
+
+          } catch (err) {
+            console.error(`Failed to set up Nginx for ${domain}:`, err.message);
+            throw new Error(`Failed to set up Nginx for ${domain}: ${err.message}`);
           }
 
-          await fs.writeFile(nginxConfigPath, nginxConfig);
-          console.log(`Nginx configuration for ${domain} created at ${nginxConfigPath}`);
-
-          await fs.symlink(nginxConfigPath, nginxConfigLink);
-          console.log(`Nginx configuration symlink created at ${nginxConfigLink}`);
-
-          execSync('sudo nginx -t');  // Test Nginx configuration
-          execSync('sudo nginx -s reload');  // Reload Nginx
-          console.log(`Nginx reloaded and ${domain} is now active`);
-
-        } catch (err) {
-          console.error(`Failed to set up Nginx for ${domain}:`, err.message);
-          throw new Error(`Failed to set up Nginx for ${domain}: ${err.message}`);
+        } else {
+          console.log("No domain provided");
         }
-
-      } else {
-        console.log("No domain provided");
-      }
 
       const container = await docker.createContainer({
         Image: imageName,

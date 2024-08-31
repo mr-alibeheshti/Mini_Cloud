@@ -14,5 +14,6 @@ router.post('/remove/:containerId', (req, res, next) => containerController.remo
 router.post('/update/:containerId', (req, res, next) => containerController.update(req, res, next));
 router.post('/log/:containerId', (req, res, next) => containerController.log(req, res, next));
 router.post('/stat/:containerId', (req, res, next) => containerController.stat(req, res, next));
+router.post('/change-domain', (req, res, next) => containerController.changeDomain(req, res, next));
 
 module.exports = router;

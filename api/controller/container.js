@@ -1,10 +1,73 @@
 const Docker = require('dockerode');
 const axios = require('axios');
 const docker = new Docker({ socketPath: '/var/run/docker.sock' });
+const fs = require('fs-extra');
+const path = require('path');
+const { execSync } = require('child_process');
 
 class ContainerController {
   constructor() {
     this.docker = docker;
+  }
+  async changeDomain(req, res) {
+    const { currentDomain, newDomain } = req.body;
+  
+    if (!currentDomain || !newDomain) {
+      return res.status(400).send({ error: 'Both currentDomain and newDomain are required.' });
+    }
+  
+    try {
+      const formattedCurrentDomain = `${currentDomain}.minicloud.local`;
+      const formattedNewDomain = `${newDomain}.minicloud.local`;
+  
+      // Update /etc/hosts
+      const hostsFilePath = '/etc/hosts';
+      let hostsFileContent = await fs.readFile(hostsFilePath, 'utf8');
+      
+      if (!hostsFileContent.includes(formattedCurrentDomain)) {
+        return res.status(400).send({ error: `Domain ${formattedCurrentDomain} not found in ${hostsFilePath}` });
+      }
+  
+      hostsFileContent = hostsFileContent.replace(new RegExp(`127.0.0.1 ${formattedCurrentDomain}`, 'g'), `127.0.0.1 ${formattedNewDomain}`);
+      await fs.writeFile(hostsFilePath, hostsFileContent);
+      console.log(`Updated domain in ${hostsFilePath}`);
+  
+      // Update Nginx configuration
+      const nginxAvailablePath = '/etc/nginx/sites-available';
+      const nginxEnabledPath = '/etc/nginx/sites-enabled';
+      const currentNginxConfigPath = path.join(nginxAvailablePath, formattedCurrentDomain);
+      const newNginxConfigPath = path.join(nginxAvailablePath, formattedNewDomain);
+      const currentNginxConfigLink = path.join(nginxEnabledPath, formattedCurrentDomain);
+      const newNginxConfigLink = path.join(nginxEnabledPath, formattedNewDomain);
+  
+      if (!fs.existsSync(currentNginxConfigPath)) {
+        return res.status(400).send({ error: `Nginx configuration for ${formattedCurrentDomain} not found.` });
+      }
+  
+      // Replace domain in the Nginx config file
+      let nginxConfigContent = await fs.readFile(currentNginxConfigPath, 'utf8');
+      nginxConfigContent = nginxConfigContent.replace(new RegExp(formattedCurrentDomain, 'g'), formattedNewDomain);
+  
+      await fs.writeFile(newNginxConfigPath, nginxConfigContent);
+      console.log(`Created new Nginx config at ${newNginxConfigPath}`);
+  
+      if (fs.existsSync(currentNginxConfigLink)) {
+        await fs.unlink(currentNginxConfigLink);
+      }
+  
+      await fs.symlink(newNginxConfigPath, newNginxConfigLink);
+      console.log(`Updated Nginx symlink at ${newNginxConfigLink}`);
+  
+      // Reload Nginx
+      execSync('sudo nginx -t');
+      execSync('sudo nginx -s reload');
+      console.log('Nginx reloaded');
+  
+      res.send({ message: `Domain successfully changed from ${formattedCurrentDomain} to ${formattedNewDomain}` });
+    } catch (err) {
+      console.error(`Failed to change domain: ${err.message}`);
+      res.status(500).send({ error: `Failed to change domain: ${err.message}` });
+    }
   }
   
   async log(req, res, next) {
