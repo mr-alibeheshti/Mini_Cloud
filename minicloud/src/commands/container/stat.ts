@@ -14,7 +14,7 @@ export default class Stat extends BaseCommand {
     const { args } = await this.parse(Stat);
 
     try {
-      const response = await axios.post(`http://127.0.0.1:3500/api/v1/container/stat/${args.ContainerId}`);
+      const response = await axios.post(`http://api.minicloud.local/api/v1/container/stat/${args.ContainerId}`);
       this.log('Response data:', response.data.data);
     } catch (error: any) {
       this.handleError(error);

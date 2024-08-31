@@ -14,7 +14,7 @@ export default class Ps extends BaseCommand {
     const { flags } = await this.parse(Ps);
 
     try {
-      const response = await axios.get(`http://127.0.0.1:3500/api/v1/container/ps${flags.all ? '?all=true' : ''}`);
+      const response = await axios.get(`http://api.minicloud.local/api/v1/container/ps${flags.all ? '?all=true' : ''}`);
       this.log('Response data:', response.data.results);
     } catch (error: any) {
       this.handleError(error);

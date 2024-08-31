@@ -16,7 +16,7 @@ export default class AddVolume extends BaseCommand {
   async run(): Promise<void> {
     const { args, flags } = await this.parse(AddVolume);
 
-    const url = `http://127.0.0.1:3500/api/v1/volume/add/${args.name}/${flags.mountPoint ? `?mountPoint=${flags.mountPoint}` : ""}`;
+    const url = `http://api.minicloud.local/api/v1/volume/add/${args.name}/${flags.mountPoint ? `?mountPoint=${flags.mountPoint}` : ""}`;
     
     try {
       const response = await axios.post(url);

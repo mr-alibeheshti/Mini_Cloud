@@ -1,123 +1,12 @@
 const Docker = require('dockerode');
 const axios = require('axios');
-const fs = require('fs/promises');
-const { execSync } = require('child_process');
 const docker = new Docker({ socketPath: '/var/run/docker.sock' });
 
 class ContainerController {
   constructor() {
     this.docker = docker;
   }
-
-  async run(req, res, next) {
-    try {
-      const { imageName, hostPort, containerPort, cpu, volume, environment, memory, domain } = req.query;
-
-      if (!imageName) {
-        return res.status(400).send({ error: 'Image name is required.' });
-      }
-
-      if (!hostPort || !containerPort) {
-        return res.status(400).send({ error: 'Both hostPort and containerPort are required.' });
-      }
-
-      const query = { cpu, volume, environment, memory };
-      const data = await this.runContainer(imageName, hostPort, containerPort, domain, query);
-      res.send(data);
-    } catch (err) {
-      res.status(500).send({ error: err.message });
-    }
-  }
-
-  async runContainer(imageName, hostPort, containerPort, domain, query) {
-    const ports = [hostPort, containerPort];
-    if (!ports || ports.length !== 2) {
-      throw new Error('Invalid or missing port format. Use the format host:container, e.g., 8080:80.');
-    }
-
-    const cpuPercent = query.cpu ?? 10;
-    const cpuPeriod = 1000000;
-    const cpuQuota = Math.round((cpuPeriod * cpuPercent) / 100);
-
-    let memoryBytes = (query.memory ? parseInt(query.memory) * 1024 * 1024 : 512 * 1024 * 1024);
-
-    let volumeBindings = [];
-    if (query.volume) {
-      const volumes = query.volume.split(':');
-      if (volumes.length !== 2) {
-        throw new Error('Invalid volume format. Use the format hostPath:containerPath.');
-      }
-      volumeBindings.push(query.volume);
-    }
-
-    try {
-      await new Promise((resolve, reject) => {
-        docker.pull(imageName, (err, stream) => {
-          if (err) {
-            return reject(err);
-          }
-
-          docker.modem.followProgress(stream, (err) => {
-            if (err) {
-              return reject(err);
-            }
-            resolve();
-          });
-        });
-      });
-
-      if (domain) {
-        const hostsFilePath = '/etc/hosts';
-        const domainEntry = `127.0.0.1 ${domain}`;
-        await fs.appendFile(hostsFilePath, `\n${domainEntry}`);
-        console.log(`Domain ${domain} added to ${hostsFilePath}`);
-
-        const nginxConfig = `
-server {
-    listen 80;
-    server_name ${domain};
-
-    location / {
-        proxy_pass http://127.0.0.1:${hostPort};
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}`;
-
-        const nginxConfigPath = `/etc/nginx/sites-available/${domain}`;
-        const nginxConfigLink = `/etc/nginx/sites-enabled/${domain}`;
-
-        await fs.writeFile(nginxConfigPath, nginxConfig);
-        console.log(`Nginx configuration for ${domain} created at ${nginxConfigPath}`);
-
-        // Enable site in Nginx
-        await fs.symlink(nginxConfigPath, nginxConfigLink);
-        execSync('nginx -s reload');
-        console.log(`Nginx reloaded and ${domain} is now active`);
-      }
-
-      const container = await docker.createContainer({
-        Image: imageName,
-        ExposedPorts: { [`${containerPort}/tcp`]: {} },
-        HostConfig: {
-          PortBindings: { [`${containerPort}/tcp`]: [{ HostPort: hostPort }] },
-          CpuQuota: cpuQuota,
-          CpuPeriod: cpuPeriod,
-          Binds: volumeBindings,
-          Memory: memoryBytes,
-        },
-        Env: query.environment ? query.environment.split(',').map((env) => env.trim()) : [],
-      });
-
-      await container.start();
-      return { message: 'Container started successfully', containerId: container.id };
-    } catch (err) {
-      throw new Error(`Error running container: ${err.message}`);
-    }
-  }
-
+  
   async log(req, res, next) {
     try {
       const containerId = req.params.containerId;

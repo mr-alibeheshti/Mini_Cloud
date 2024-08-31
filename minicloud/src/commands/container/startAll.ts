@@ -7,7 +7,7 @@ export default class StartAll extends BaseCommand {
 
   async run(): Promise<void> {
     try {
-      const response = await axios.post('http://127.0.0.1:3500/api/v1/container/start-all');
+      const response = await axios.post('http://api.minicloud.local/api/v1/container/start-all');
       this.log('Response data:', response.data);
     } catch (error: any) {
       this.handleError(error);
