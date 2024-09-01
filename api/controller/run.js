@@ -2,12 +2,52 @@ const Docker = require('dockerode');
 const fs = require('fs-extra');
 const path = require('path');
 const { execSync } = require('child_process');
+const { promisify } = require('util');
+const exec = promisify(require('child_process').exec);
+const net = require('net');
 
 const docker = new Docker({ socketPath: '/var/run/docker.sock' });
 
 class RunController {
   constructor() {
     this.docker = docker;
+  }
+
+  generateRandomSubdomain() {
+    return Math.random().toString(36).substring(2, 7);
+  }
+
+  async isDomainConfiguredInNginx(domain) {
+    const nginxAvailablePath = '/etc/nginx/sites-available';
+    const nginxEnabledPath = '/etc/nginx/sites-enabled';
+    const nginxConfigPath = path.join(nginxAvailablePath, domain);
+    const nginxConfigLink = path.join(nginxEnabledPath, domain);
+
+    return fs.existsSync(nginxConfigPath) || fs.existsSync(nginxConfigLink);
+  }
+
+  async isPortInUse(port) {
+    return new Promise((resolve) => {
+      const server = net.createServer();
+      server.once('error', (err) => {
+        if (err.code === 'EADDRINUSE') {
+          resolve(true);
+        } else {
+          resolve(false);
+        }
+      });
+      server.once('listening', () => {
+        server.close();
+        resolve(false);
+      });
+      server.listen(port);
+    });
+  }
+
+  async isDomainInUse(domain, port) {
+    const isDomainConfigured = await this.isDomainConfiguredInNginx(domain);
+    const isPortUsed = await this.isPortInUse(port);
+    return isDomainConfigured || isPortUsed;
   }
 
   async run(req, res, next) {
@@ -21,6 +61,12 @@ class RunController {
       if (!hostPort || !containerPort) {
         return res.status(400).send({ error: 'Both hostPort and containerPort are required.' });
       }
+
+      const domainInUse = await this.isDomainInUse(domain, hostPort);
+      if(domain){
+      if (domainInUse) {
+        return res.status(400).send({ error: `Domain ${domain} is already in use. Please choose a different domain.` });
+      }}
 
       const query = { cpu, volume, environment, memory };
       const data = await this.runContainer(imageName, hostPort, containerPort, domain, query);
@@ -50,7 +96,6 @@ class RunController {
     }
 
     try {
-      // Pull the Docker image
       await new Promise((resolve, reject) => {
         docker.pull(imageName, (err, stream) => {
           if (err) {
@@ -66,74 +111,30 @@ class RunController {
         });
       });
 
-        if (domain) {
-          domain = `${domain}.minicloud.local`;
+      if (!domain) {
+        domain = `${this.generateRandomSubdomain()}.minicloud.local`;
+        console.log("Generated random subdomain:", domain);
+      } else {
+        console.log("Using provided domain:", domain);
+      }
 
-          console.log("Processing domain:", domain);
+      const hostsFilePath = '/etc/hosts';
+      const domainEntry = `127.0.0.1 ${domain}`;
 
-          const hostsFilePath = '/etc/hosts';
-          const domainEntry = `127.0.0.1 ${domain}`;
-
-          try {
-            const hostsFileContent = await fs.readFile(hostsFilePath, 'utf8');
-            if (hostsFileContent.includes(domainEntry)) {
-              console.log(`Domain ${domain} already exists in ${hostsFilePath}. Skipping deployment.`);
-              return { message: `Domain ${domain} already exists. Deployment skipped.` };
-            }
-
-            await fs.appendFile(hostsFilePath, `\n${domainEntry}`);
-            console.log(`Domain ${domain} added to ${hostsFilePath}`);
-          } catch (err) {
-            console.error(`Failed to add domain to ${hostsFilePath}:`, err.message);
-            throw new Error(`Failed to add domain to ${hostsFilePath}: ${err.message}`);
-          }
-
-          const nginxConfig = `
-            server {
-                listen 80;
-                server_name ${domain};
-
-                location / {
-                    proxy_pass http://localhost:${hostPort}; 
-                    proxy_set_header Host $host;
-                    proxy_set_header X-Real-IP $remote_addr;
-                    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                    proxy_set_header X-Forwarded-Proto $scheme;
-                }
-            }`;
-
-          const nginxAvailablePath = '/etc/nginx/sites-available';
-          const nginxEnabledPath = '/etc/nginx/sites-enabled';
-
-          await fs.ensureDir(nginxAvailablePath);
-          await fs.ensureDir(nginxEnabledPath);
-
-          const nginxConfigPath = path.join(nginxAvailablePath, domain);
-          const nginxConfigLink = path.join(nginxEnabledPath, domain);
-
-          try {
-            if (fs.existsSync(nginxConfigLink)) {
-              await fs.unlink(nginxConfigLink);
-            }
-
-            await fs.writeFile(nginxConfigPath, nginxConfig);
-            console.log(`Nginx configuration for ${domain} created at ${nginxConfigPath}`);
-
-            await fs.symlink(nginxConfigPath, nginxConfigLink);
-            console.log(`Nginx configuration symlink created at ${nginxConfigLink}`);
-
-            execSync('sudo nginx -t');
-            execSync('sudo nginx -s reload');
-            console.log(`Nginx reloaded and ${domain} is now active`);
-
-          } catch (err) {
-            console.error(`Failed to set up Nginx for ${domain}:`, err.message);
-            throw new Error(`Failed to set up Nginx for ${domain}: ${err.message}`);
-          }
-
+      try {
+        const hostsFileContent = await fs.readFile(hostsFilePath, 'utf8');
+        if (hostsFileContent.includes(domainEntry)) {
+          console.log(`Domain ${domain} already exists in ${hostsFilePath}.`);
         } else {
-          console.log("No domain provided");
+          await fs.appendFile(hostsFilePath, `\n${domainEntry}`);
+          console.log(`Domain ${domain} added to ${hostsFilePath}`);
         }
+      } catch (err) {
+        console.error(`Failed to add domain to ${hostsFilePath}:`, err.message);
+        throw new Error(`Failed to add domain to ${hostsFilePath}: ${err.message}`);
+      }
+
+      await this.setupNginxAndSSL(domain, hostPort);
 
       const container = await docker.createContainer({
         Image: imageName,
@@ -149,10 +150,75 @@ class RunController {
       });
 
       await container.start();
-      return { message: 'Container started successfully', containerId: container.id };
+      return { message: `Container started successfully. Your container is accessible at https://${domain}`, containerId: container.id };
 
     } catch (err) {
       throw new Error(`Error running container: ${err.message}`);
+    }
+  }
+
+  async setupNginxAndSSL(domain, hostPort) {
+    const nginxAvailablePath = '/etc/nginx/sites-available';
+    const nginxEnabledPath = '/etc/nginx/sites-enabled';
+
+    await fs.ensureDir(nginxAvailablePath);
+    await fs.ensureDir(nginxEnabledPath);
+
+    const nginxConfigLink = path.join(nginxEnabledPath, domain);
+
+    try {
+      if (fs.existsSync(nginxConfigLink)) {
+        await fs.unlink(nginxConfigLink);
+      }
+
+    } catch (err) {
+      console.error(`Failed to set up Nginx for ${domain}:`, err.message);
+      throw new Error(`Failed to set up Nginx for ${domain}: ${err.message}`);
+    }
+
+    const certPath = `/etc/nginx/ssl/${domain}`;
+    await fs.ensureDir(certPath);
+    execSync(`mkcert -key-file ${certPath}/key.pem -cert-file ${certPath}/cert.pem ${domain}`);
+    console.log(`SSL certificate created for domain ${domain} at ${certPath}.`);
+
+    const sslNginxConfig = `
+server {
+    listen 443 ssl;
+    server_name ${domain};
+
+    ssl_certificate ${certPath}/cert.pem;
+    ssl_certificate_key ${certPath}/key.pem;
+
+    location / {
+        proxy_pass http://localhost:${hostPort};
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+`;
+
+    const sslNginxConfigPath = path.join(nginxAvailablePath, `${domain}`);
+    const sslNginxConfigLink = path.join(nginxEnabledPath, `${domain}`);
+
+    try {
+      if (fs.existsSync(sslNginxConfigLink)) {
+        await fs.unlink(sslNginxConfigLink);
+      }
+
+      await fs.writeFile(sslNginxConfigPath, sslNginxConfig);
+      console.log(`Nginx SSL configuration for ${domain} created at ${sslNginxConfigPath}`);
+
+      await fs.symlink(sslNginxConfigPath, sslNginxConfigLink);
+      console.log(`Nginx SSL configuration symlink created at ${sslNginxConfigLink}`);
+
+      execSync('sudo nginx -t');
+      execSync('sudo systemctl reload nginx');
+      console.log(`Nginx reloaded and ${domain} is now accessible via HTTPS.`);
+    } catch (err) {
+      console.error(`Failed to set up Nginx SSL for ${domain}:`, err.message);
+      throw new Error(`Failed to set up Nginx SSL for ${domain}: ${err.message}`);
     }
   }
 }

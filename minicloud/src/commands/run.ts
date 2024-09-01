@@ -1,15 +1,12 @@
   import { Args, Command, Flags } from '@oclif/core';
   import axios from 'axios';
-  import fs from 'fs-extra';
-  import { execSync } from 'child_process';
-  import path from 'path';
 
   import BaseCommand from '../base-command';
 
   export default class Run extends BaseCommand {
     static args = {
       Image: Args.string({ description: 'Name of Docker Image in Docker Hub', required: true }),
-      Domain: Args.string({ description: 'Domain name for the container', required: true }),
+      Domain: Args.string({ description: 'Domain name for the container', required: false }),
     };
 
     static description = 'Run your Docker image from Docker Hub on the server with a domain';
@@ -38,16 +35,14 @@
     
       const [hostPort, containerPort] = flags.port.split(':');
     
-      // URL-encode parameters
       const imageName = encodeURIComponent(args.Image);
-      const domain = encodeURIComponent(args.Domain);
+      const domain = args.Domain ? encodeURIComponent(args.Domain) : '';
       const cpu = flags.cpu ? `&cpu=${encodeURIComponent(flags.cpu.toString())}` : '';
       const memory = flags.ram ? `&memory=${encodeURIComponent(flags.ram.toString())}` : '';
       const volume = flags.volume ? `&volume=${encodeURIComponent(flags.volume)}` : '';
       const environment = flags.environment ? `&environment=${encodeURIComponent(flags.environment)}` : '';
     
       const url = `http://api.minicloud.local/api/v1/run?imageName=${imageName}&domain=${domain}&hostPort=${hostPort}&containerPort=${containerPort}${cpu}${memory}${volume}${environment}`;
-      console.log(url);
       try {
         const response = await axios.post(url);
         this.log('Response data:', response.data);
