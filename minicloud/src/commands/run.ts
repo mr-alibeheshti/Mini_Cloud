@@ -42,7 +42,7 @@
       const volume = flags.volume ? `&volume=${encodeURIComponent(flags.volume)}` : '';
       const environment = flags.environment ? `&environment=${encodeURIComponent(flags.environment)}` : '';
     
-      const url = `http://api.minicloud.local/api/v1/run?imageName=${imageName}&domain=${domain}&hostPort=${hostPort}&containerPort=${containerPort}${cpu}${memory}${volume}${environment}`;
+      const url = `http://localhost:3500/api/v1/run?imageName=${imageName}&domain=${domain}&hostPort=${hostPort}&containerPort=${containerPort}${cpu}${memory}${volume}${environment}`;
       try {
         const response = await axios.post(url);
         this.log('Response data:', response.data);
