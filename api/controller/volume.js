@@ -64,21 +64,13 @@ class VolumeController {
 
     try {
       const sizeLimit = sizeLimitation ? `${sizeLimitation}G` : '1G';
-      const loopFilePath = path.join('/tmp/limitation', `${volumeName}.loop`);
+      const loopFilePath = path.join('/Volumes/', `Useremail@gmail.com_${volumeName}.loop`);
 
       execSync(`truncate -s ${sizeLimit} ${loopFilePath}`, { stdio: 'inherit' });
 
       execSync(`sudo chmod 666 ${loopFilePath}`, { stdio: 'inherit' });
 
-      execSync(`sudo losetup -fP ${loopFilePath}`, { stdio: 'inherit' });
-
-      const loopDevice = execSync(`sudo losetup -l | grep ${loopFilePath} | awk '{print $1}'`).toString().trim();
-
-      if (!loopDevice) {
-        throw new Error('No loop device found');
-      }
-
-      execSync(`sudo mkfs.ext4 ${loopDevice}`, { stdio: 'inherit' });
+      execSync(`mkfs.ext4 ${loopFilePath}`, { stdio: 'inherit' });
 
       if (!fs.existsSync(mountPoint)) {
         execSync(`sudo mkdir -p ${mountPoint}`, { stdio: 'inherit' });
@@ -86,11 +78,11 @@ class VolumeController {
 
       execSync(`sudo chmod 777 ${mountPoint}`, { stdio: 'inherit' });
 
-      execSync(`sudo mount ${loopDevice} ${mountPoint}`, { stdio: 'inherit' });
+      execSync(`sudo mount ${loopFilePath} ${mountPoint}`, { stdio: 'inherit' });
 
-      return `Created volume ${volumeName} with ${sizeLimitation} size and mounted to ${mountPoint}`;
+      return `Created volume Useremail@gmail.com_${volumeName} with ${sizeLimitation} size and mounted to ${mountPoint}`;
     } catch (err) {
-      throw new Error(`Error creating volume ${volumeName}: ${err.message}`);
+      throw new Error(`Error creating volume Useremail@gmail.com_${volumeName}: ${err.message}`);
     }
   }
 

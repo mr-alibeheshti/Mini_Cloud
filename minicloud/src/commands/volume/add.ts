@@ -17,7 +17,6 @@ export default class AddVolume extends BaseCommand {
   async run(): Promise<void> {
     const { args, flags } = await this.parse(AddVolume);
 
-    // درست کردن URL برای درخواست
     const queryParams = [];
     if (flags.mountPoint) queryParams.push(`mountPoint=${flags.mountPoint}`);
     if (flags.SizeLimit) queryParams.push(`sizelimit=${flags.SizeLimit}`);
