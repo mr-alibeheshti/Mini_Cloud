@@ -66,21 +66,33 @@ class VolumeController {
       const sizeLimit = sizeLimitation ? `${sizeLimitation}G` : '1G';
       const loopFilePath = path.join('/Volumes/', `Useremail@gmail.com_${volumeName}.loop`);
 
+      console.log(`Creating loopback file at ${loopFilePath} with size ${sizeLimit}`);
       execSync(`truncate -s ${sizeLimit} ${loopFilePath}`, { stdio: 'inherit' });
 
+      console.log(`Setting permissions for ${loopFilePath}`);
       execSync(`sudo chmod 666 ${loopFilePath}`, { stdio: 'inherit' });
 
+      console.log(`Formatting ${loopFilePath} as ext4`);
       execSync(`mkfs.ext4 ${loopFilePath}`, { stdio: 'inherit' });
 
       if (!fs.existsSync(mountPoint)) {
+        console.log(`Creating mount point at ${mountPoint}`);
         execSync(`sudo mkdir -p ${mountPoint}`, { stdio: 'inherit' });
       }
 
+      console.log(`Setting permissions for mount point ${mountPoint}`);
       execSync(`sudo chmod 777 ${mountPoint}`, { stdio: 'inherit' });
 
+      console.log(`Mounting ${loopFilePath} to ${mountPoint}`);
       execSync(`sudo mount ${loopFilePath} ${mountPoint}`, { stdio: 'inherit' });
 
-      return `Created volume Useremail@gmail.com_${volumeName} with ${sizeLimitation} size and mounted to ${mountPoint}`;
+      console.log(`Creating Docker volume with name ${volumeName}`);
+      const dockerVolume = await this.docker.createVolume(volumeConfig);
+
+      return {
+        message: `Created volume Useremail@gmail.com_${volumeName} with size ${sizeLimitation}G and mounted to ${mountPoint}`,
+        volume: dockerVolume,
+      };
     } catch (err) {
       throw new Error(`Error creating volume Useremail@gmail.com_${volumeName}: ${err.message}`);
     }
@@ -88,7 +100,18 @@ class VolumeController {
 
   async removeVolume(volumeName) {
     try {
-      await docker.getVolume(volumeName).remove();
+      const loopFilePath = path.join('/Volumes/', `Useremail@gmail.com_${volumeName}.loop`);
+      const volumeMountPoint = `/path/to/mount/${volumeName}`; 
+
+      console.log(`Unmounting ${volumeMountPoint}`);
+      execSync(`sudo umount ${volumeMountPoint}`, { stdio: 'inherit' });
+
+      console.log(`Removing Docker volume ${volumeName}`);
+      await this.docker.getVolume(volumeName).remove();
+
+      console.log(`Deleting loopback file ${loopFilePath}`);
+      execSync(`sudo rm -f ${loopFilePath}`, { stdio: 'inherit' });
+
       return `Removed volume ${volumeName}`;
     } catch (err) {
       throw new Error(`Error removing volume ${volumeName}: ${err.message}`);
@@ -97,14 +120,15 @@ class VolumeController {
 
   async listVolumes() {
     try {
-      const volumes = await docker.listVolumes();
+      console.log('Listing Docker volumes');
+      const volumes = await this.docker.listVolumes();
       const volumesArray = [];
 
       if (volumes.Volumes) {
         volumes.Volumes.forEach((volume) => {
           volumesArray.push({
             Name: volume.Name,
-            Driver: volume.Driver
+            Driver: volume.Driver,
           });
         });
       }
@@ -116,7 +140,8 @@ class VolumeController {
 
   async inspectVolume(volumeName) {
     try {
-      const volume = docker.getVolume(volumeName);
+      console.log(`Inspecting volume ${volumeName}`);
+      const volume = this.docker.getVolume(volumeName);
       const data = await volume.inspect();
       return JSON.stringify(data, null, 2);
     } catch (err) {
