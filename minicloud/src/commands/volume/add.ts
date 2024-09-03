@@ -27,7 +27,7 @@ export default class AddVolume extends BaseCommand {
     try {
       const response = await axios.post(url);
       this.log('Response data:', response.data);
-    } catch (error: any) {
+    } catch (error) {
       this.handleError(error);
     }
   }

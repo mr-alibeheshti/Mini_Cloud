@@ -14,7 +14,7 @@ class VolumeController {
     try {
       const volumeName = req.params.volumeName;
       const mountPoint = req.query.mountPoint;
-      const sizeLimitation = req.query.sizelimit;
+      const sizeLimitation = req.query.sizeLimit;
       const data = await this.createVolume(volumeName, mountPoint, sizeLimitation);
       res.send(data);
     } catch (err) {
@@ -26,26 +26,7 @@ class VolumeController {
     try {
       const volumeName = req.params.volumeName;
       const data = await this.removeVolume(volumeName);
-      res.send(data);
-    } catch (err) {
-      next(err);
-    }
-  }
-
-  async ps(req, res, next) {
-    try {
-      const data = await this.listVolumes();
-      res.send(data);
-    } catch (err) {
-      next(err);
-    }
-  }
-
-  async inspect(req, res, next) {
-    try {
-      const volumeName = req.params.volumeName;
-      const data = await this.inspectVolume(volumeName);
-      res.send(data);
+      res.send({ message: data });
     } catch (err) {
       next(err);
     }
@@ -115,37 +96,6 @@ class VolumeController {
       return `Removed volume ${volumeName}`;
     } catch (err) {
       throw new Error(`Error removing volume ${volumeName}: ${err.message}`);
-    }
-  }
-
-  async listVolumes() {
-    try {
-      console.log('Listing Docker volumes');
-      const volumes = await this.docker.listVolumes();
-      const volumesArray = [];
-
-      if (volumes.Volumes) {
-        volumes.Volumes.forEach((volume) => {
-          volumesArray.push({
-            Name: volume.Name,
-            Driver: volume.Driver,
-          });
-        });
-      }
-      return volumesArray;
-    } catch (err) {
-      throw new Error(`Error listing volumes: ${err.message}`);
-    }
-  }
-
-  async inspectVolume(volumeName) {
-    try {
-      console.log(`Inspecting volume ${volumeName}`);
-      const volume = this.docker.getVolume(volumeName);
-      const data = await volume.inspect();
-      return JSON.stringify(data, null, 2);
-    } catch (err) {
-      throw new Error(`Error inspecting volume ${volumeName}: ${err.message}`);
     }
   }
 }

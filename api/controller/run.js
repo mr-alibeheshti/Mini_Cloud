@@ -2,8 +2,6 @@ const Docker = require('dockerode');
 const fs = require('fs-extra');
 const path = require('path');
 const { execSync } = require('child_process');
-const { promisify } = require('util');
-const exec = promisify(require('child_process').exec);
 const net = require('net');
 
 const docker = new Docker({ socketPath: '/var/run/docker.sock' });
@@ -63,10 +61,9 @@ class RunController {
       }
 
       const domainInUse = await this.isDomainInUse(domain, hostPort);
-      if(domain){
-      if (domainInUse) {
+      if (domain && domainInUse) {
         return res.status(400).send({ error: `Domain ${domain} is already in use. Please choose a different domain.` });
-      }}
+      }
 
       const query = { cpu, volume, environment, memory };
       const data = await this.runContainer(imageName, hostPort, containerPort, domain, query);
@@ -88,11 +85,15 @@ class RunController {
 
     let volumeBindings = [];
     if (query.volume) {
-      const volumes = query.volume.split(':');
-      if (volumes.length !== 2) {
-        throw new Error('Invalid volume format. Use the format hostPath:containerPath.');
-      }
-      volumeBindings.push(query.volume);
+      const volumes = query.volume.split(',');
+      volumes.forEach(volume => {
+        const [hostPath, containerPath] = volume.split(':');
+        if (hostPath && containerPath) {
+          volumeBindings.push(`${hostPath}:${containerPath}`);
+        } else {
+          throw new Error('Invalid volume format. Use the format hostPath:containerPath.');
+        }
+      });
     }
 
     try {
