@@ -13,7 +13,7 @@ class VolumeController {
   async add(req, res, next) {
     try {
       const volumeName = req.params.volumeName;
-      const sizeLimitation = req.query.sizelimit;
+      const sizeLimitation = req.query.sizelimit ? `${req.query.sizelimit}G` : '2G';
       const data = await this.createVolume(volumeName, sizeLimitation);
       res.send(data);
     } catch (err) {
@@ -56,7 +56,10 @@ class VolumeController {
         Name: volumeName,
         Driver: 'local', 
       });
-
+      execSync(`sudo lvcreate -L ${sizeLimitation} -n ${volumeName} minicloudVolume -y`)
+      execSync(`sudo mkfs.ext4 /dev/minicloudVolume/${volumeName} `)
+      execSync(`sudo mount /dev/minicloudVolume/${volumeName} /var/lib/docker/volumes/${volumeName}/_data`)
+      execSync(`sudo rmdir /var/lib/docker/volumes/${volumeName}/_data/lost+found`)
       return `Created volume ${volumeName} with size ${sizeLimitation ? sizeLimitation + 'G' : 'default'}`;
     } catch (err) {
       throw new Error(`Error creating volume ${volumeName}: ${err.message}`);
