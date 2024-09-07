@@ -417,6 +417,62 @@ server {
       });
     });
   }
-}
+  async getShellAccess(containerId, req, res) {
+    try {
+      const container = docker.getContainer(containerId);
+      if (!container) {
+        res.status(404).json({
+          status: 'fail',
+          message: `Container with ID ${containerId} not found`,
+        });
+        return;
+      }
+  
+      const exec = await container.exec({
+        AttachStdin: true,
+        AttachStdout: true,
+        AttachStderr: true,
+        Tty: true, 
+        Cmd: ['bash'],
+      });
+  
+      exec.start({ hijack: true, stdin: true }, (err, stream) => {
+        if (err) {
+          res.status(500).json({
+            status: 'error',
+            message: 'Failed to start exec instance',
+          });
+          return;
+        }
+  
+        ws.on('message', (message) => {
+          stream.write(message);
+        });
+  
+        ws.on('close', () => {
+          stream.end();
+        });
+  
+        stream.on('data', (chunk) => {
+          ws.send(chunk);
+        });
+  
+        stream.on('error', (streamErr) => {
+          ws.send(`Error: ${streamErr.message}`);
+        });
+      });
+    } catch (err) {
+      res.status(500).json({
+        status: 'error',
+        message: `Error requesting shell access: ${err.message}`,
+      });
+    }
+  }
+  
+  
+  
+  
+
+}  
 
 module.exports = ContainerController;
