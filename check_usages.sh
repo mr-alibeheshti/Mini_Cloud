@@ -1,27 +1,20 @@
 #!/bin/bash
-#run cronJob ->  * */12 * * * /Volumes/check_usages.sh > /Volumes/log.txt
-directory="/Volumes"
-threshold=80
-block_size=1024
 
-for file in "$directory"/*.loop; do
-    if [ -f "$file" ]; then
-        file_size=$(stat -c %s "$file")
+VG="minicloudVolume"
 
-        used_blocks=$(du -s "$file" | awk '{print $1}')
+THRESHOLD=80
 
-        used_space=$((used_blocks * block_size))
+EMAIL="user@example.com"
 
-        percent_used=$(echo "scale=2; ($used_space / $file_size) * 100" | bc)
+LV_LIST=$(ls /dev/mapper/${VG}-*)
 
-        echo "$file: $percent_used% used"
-
-        if (( $(echo "$percent_used > $threshold" | bc -l) )); then
-            email=$(basename "$file" | awk -F'_' '{print $1}')
-            email="$email"
-
-            echo "Warning: $file is using more than 80% of its allocated space!" | mail -s "Disk Usage Warning" "$email"
-            echo "Alert sent to: $email"
-        fi
-    fi
+for LV_PATH in $LV_LIST; do
+  LV_NAME=$(basename $LV_PATH)
+  
+  USAGE=$(df -h | grep "$LV_PATH" | awk '{print $5}' | tr -d '%' | head -n 1)
+  if  (( USAGE > THRESHOLD )) ; then
+    MESSAGE="Warning: Volume $LV_NAME is $USAGE% full. Please take action."
+    echo "$MESSAGE" | mail -s "LVM Usage Warning" "$EMAIL"
+    echo "$MESSAGE" 
+  fi
 done
