@@ -477,7 +477,7 @@ server {
   
       console.log('Uploaded file info:', req.file);
   
-      const filePath = req.file?.path; 
+      const filePath = req.file.path; 
       if (!filePath) {
         return res.status(400).send({ error: 'File not uploaded or file path is missing' });
       }
