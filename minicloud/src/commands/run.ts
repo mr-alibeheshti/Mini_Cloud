@@ -1,5 +1,6 @@
 import { Args, Command, Flags } from '@oclif/core';
 import axios from 'axios';
+
 import BaseCommand from '../base-command';
 
 export default class Run extends BaseCommand {

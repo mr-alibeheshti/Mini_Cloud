@@ -1,5 +1,5 @@
 import { Args, Command } from '@oclif/core';
-import * as readline from 'readline';
+import * as readline from 'node:readline';
 import WebSocket from 'ws';
 
 export default class ExecShell extends Command {
@@ -30,8 +30,8 @@ export default class ExecShell extends Command {
         });
 
         process.stdout.on('resize', () => {
-          const { rows, columns } = process.stdout;
-          ws.send(JSON.stringify({ type: 'resize', rows, columns }));
+          const { columns, rows } = process.stdout;
+          ws.send(JSON.stringify({ columns, rows, type: 'resize' }));
         });
 
         ws.on('message', (message) => {
@@ -54,7 +54,7 @@ export default class ExecShell extends Command {
         });
       });
 
-    } catch (error:any) {
+    } catch (error: any) {
       this.error(`Error requesting shell access: ${error.message}`);
     }
   }

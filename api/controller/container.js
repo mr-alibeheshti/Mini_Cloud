@@ -417,61 +417,59 @@ server {
       });
     });
   }
-  async getShellAccess(containerId, req, res) {
+  async execShell(containerId, ws) {
     try {
       const container = docker.getContainer(containerId);
-      if (!container) {
-        res.status(404).json({
-          status: 'fail',
-          message: `Container with ID ${containerId} not found`,
-        });
-        return;
-      }
-  
-      const exec = await container.exec({
-        AttachStdin: true,
-        AttachStdout: true,
-        AttachStderr: true,
-        Tty: true, 
-        Cmd: ['bash'],
-      });
-  
-      exec.start({ hijack: true, stdin: true }, (err, stream) => {
-        if (err) {
-          res.status(500).json({
-            status: 'error',
-            message: 'Failed to start exec instance',
-          });
-          return;
-        }
-  
-        ws.on('message', (message) => {
-          stream.write(message);
-        });
-  
-        ws.on('close', () => {
-          stream.end();
-        });
-  
-        stream.on('data', (chunk) => {
-          ws.send(chunk);
-        });
-  
-        stream.on('error', (streamErr) => {
-          ws.send(`Error: ${streamErr.message}`);
+      const exec = await new Promise((resolve, reject) => {
+        container.exec({
+          AttachStdin: true,
+          AttachStdout: true,
+          AttachStderr: true,
+          Tty: true,
+          Cmd: ['bash'],
+        }, (err, execInstance) => {
+          if (err) return reject(err);
+          resolve(execInstance);
         });
       });
+
+      const stream = await new Promise((resolve, reject) => {
+        exec.start({ hijack:true,stdin: true }, (err, execStream) => {
+          if (err) return reject(err);
+          resolve(execStream);
+        });
+      });
+
+      stream.on('data', (chunk) => {
+        ws.send(chunk);
+      });
+
+      stream.on('end', () => {
+        ws.close();
+      });
+
+      stream.on('error', (streamErr) => {
+        ws.send(`Stream Error: ${streamErr.message}`);
+      });
+
+      ws.on('message', (message) => {
+        stream.write(message);
+      });
+
+      ws.on('close', () => {
+        stream.end();
+      });
+
+      ws.on('error', (wsErr) => {
+        stream.end();
+        console.error(`WebSocket Error: ${wsErr.message}`);
+      });
+
     } catch (err) {
-      res.status(500).json({
-        status: 'error',
-        message: `Error requesting shell access: ${err.message}`,
-      });
+      ws.send(`Error: ${err.message}`);
+      ws.close();
     }
   }
-  
-  
-  
-  
 
 }  
 
