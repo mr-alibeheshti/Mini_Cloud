@@ -4,7 +4,8 @@ const docker = new Docker({ socketPath: '/var/run/docker.sock' });
 const fs = require('fs-extra');
 const path = require('path');
 const { execSync } = require('child_process');
-
+const multer = require('multer');
+const upload = multer({ dest: 'uploads/' });
 class ContainerController {
   constructor() {
     this.docker = docker;
@@ -115,8 +116,6 @@ server {
       res.status(500).send({ error: `Failed to change domain: ${err.message}` });
     }
   }
-
-
 
   async log(req, res, next) {
     try {
@@ -470,7 +469,58 @@ server {
       ws.close();
     }
   }
-
+  async buildImage(req, res) {
+    upload.single('file')(req, res, async (err) => {
+      if (err) {
+        return res.status(400).send({ error: `File upload error: ${err.message}` });
+      }
+  
+      console.log('Uploaded file info:', req.file);
+  
+      const filePath = req.file?.path; 
+      if (!filePath) {
+        return res.status(400).send({ error: 'File not uploaded or file path is missing' });
+      }
+  
+      const imageName = req.body.imageName || 'my-image:latest';
+      console.log(imageName);
+  
+      try {
+        if (!fs.existsSync(filePath)) {
+          return res.status(400).send({ error: 'Uploaded file not found' });
+        }
+  
+        const tarStream = fs.createReadStream(filePath);
+        console.log(`Starting build for image ${imageName} from file ${filePath}`);
+  
+        const buildStream = await docker.buildImage(tarStream, { t: imageName });
+  
+        docker.modem.followProgress(buildStream, (err, output) => {
+          if (err) {
+            console.error(`Error during build: ${err.message}`);
+            return res.status(500).send({ error: `Error building image: ${err.message}` });
+          }
+  
+          console.log(`Image ${imageName} built successfully`);
+  
+          fs.remove(filePath)
+            .then(() => {
+              res.send({ message: `Image ${imageName} built successfully`, output });
+            })
+            .catch(cleanupErr => {
+              console.error(`Error cleaning up file: ${cleanupErr.message}`);
+              res.status(500).send({ error: `Error cleaning up file: ${cleanupErr.message}` });
+            });
+        });
+      } catch (err) {
+        console.error(`Error during build process: ${err.message}`);
+        fs.remove(filePath).finally(() => {
+          res.status(500).send({ error: `Error building image: ${err.message}` });
+        });
+      }
+    });
+  }
+  
 }  
 
 module.exports = ContainerController;

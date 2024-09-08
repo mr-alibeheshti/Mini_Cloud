@@ -1,5 +1,6 @@
 const http = require('http');
 const WebSocket = require('ws');
+const Docker = require('dockerode');
 const app = require('./app');
 const ContainerController = require('./controller/container');
 
