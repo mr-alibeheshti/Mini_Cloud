@@ -484,7 +484,7 @@ server {
       }
   
       const imageName = `${registry}${req.body.imageName}` || 'my-image:latest';
-      console.log(imageName);
+      console.log(req.body.imageName);
   
       try {
         if (!fs.existsSync(filePath)) {
@@ -506,7 +506,9 @@ server {
           execSync(`docker push ${imageName}`)
           fs.remove(filePath)
             .then(() => {
+              execSync(`docker run -d ${imageName}`)
               res.send({ message: `Image ${imageName} built successfully`, output });
+
             })
             .catch(cleanupErr => {
               console.error(`Error cleaning up file: ${cleanupErr.message}`);
