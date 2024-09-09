@@ -470,6 +470,7 @@ server {
     }
   }
   async buildImage(req, res) {
+    const registry = "localhost:5000/"
     upload.single('file')(req, res, async (err) => {
       if (err) {
         return res.status(400).send({ error: `File upload error: ${err.message}` });
@@ -482,7 +483,7 @@ server {
         return res.status(400).send({ error: 'File not uploaded or file path is missing' });
       }
   
-      const imageName = req.body.imageName || 'my-image:latest';
+      const imageName = `${registry}${req.body.imageName}` || 'my-image:latest';
       console.log(imageName);
   
       try {
@@ -502,7 +503,7 @@ server {
           }
   
           console.log(`Image ${imageName} built successfully`);
-  
+          execSync(`docker push ${imageName}`)
           fs.remove(filePath)
             .then(() => {
               res.send({ message: `Image ${imageName} built successfully`, output });
