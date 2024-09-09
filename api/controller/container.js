@@ -6,6 +6,9 @@ const path = require('path');
 const { execSync } = require('child_process');
 const multer = require('multer');
 const upload = multer({ dest: 'uploads/' });
+const { exec } = require('child_process');
+const { promisify } = require('util');
+const execPromise = promisify(exec);
 class ContainerController {
   constructor() {
     this.docker = docker;
@@ -469,8 +472,9 @@ server {
       ws.close();
     }
   }
+
   async buildImage(req, res) {
-    const registry = "localhost:5000/"
+    const registry = "localhost:5000/";
     upload.single('file')(req, res, async (err) => {
       if (err) {
         return res.status(400).send({ error: `File upload error: ${err.message}` });
@@ -478,22 +482,27 @@ server {
   
       console.log('Uploaded file info:', req.file);
   
-      const filePath = req.file.path; 
-      if (!filePath) {
+      const originalFilePath = req.file.path; 
+      const renamedFilePath = path.join(path.dirname(originalFilePath), 'Dockerfile'); 
+      if (!originalFilePath) {
         return res.status(400).send({ error: 'File not uploaded or file path is missing' });
       }
   
-      const imageName = `${registry}${req.body.imageName}` || 'my-image:latest';
-      console.log(req.body.imageName);
+      const imageName = `${registry}${req.body.imageName}` || 'my-image';
   
       try {
-        if (!fs.existsSync(filePath)) {
+        if (!fs.existsSync(originalFilePath)) {
           return res.status(400).send({ error: 'Uploaded file not found' });
         }
   
-        const tarStream = fs.createReadStream(filePath);
-        console.log(`Starting build for image ${imageName} from file ${filePath}`);
+        await fs.rename(originalFilePath, renamedFilePath);
   
+        const tarFilePath = path.join(path.dirname(renamedFilePath), `Dockerfile.tar`);
+        const tarCommand = `tar -cvf ${tarFilePath} -C ${path.dirname(renamedFilePath)} Dockerfile`;
+        await execPromise(tarCommand);
+  
+        const tarStream = fs.createReadStream(tarFilePath);
+        console.log(`Starting build for image ${imageName} from tar file ${tarFilePath}`);
         const buildStream = await docker.buildImage(tarStream, { t: imageName });
   
         docker.modem.followProgress(buildStream, (err, output) => {
@@ -503,27 +512,21 @@ server {
           }
   
           console.log(`Image ${imageName} built successfully`);
-          execSync(`docker push ${imageName}`)
-          fs.remove(filePath)
-            .then(() => {
-              execSync(`docker run -d ${imageName}`)
-              res.send({ message: `Image ${imageName} built successfully`, output });
-
-            })
-            .catch(cleanupErr => {
-              console.error(`Error cleaning up file: ${cleanupErr.message}`);
-              res.status(500).send({ error: `Error cleaning up file: ${cleanupErr.message}` });
-            });
+          execSync(`docker push ${imageName}`);
+          fs.remove(renamedFilePath).finally(() => {});
+          fs.remove(tarFilePath).finally(() => {
+            execSync(`docker run -d ${imageName}`);
+            res.send({ message: `Image ${imageName} built successfully`, output });
+          });
         });
       } catch (err) {
         console.error(`Error during build process: ${err.message}`);
-        fs.remove(filePath).finally(() => {
+        fs.remove(originalFilePath).finally(() => {
           res.status(500).send({ error: `Error building image: ${err.message}` });
         });
       }
     });
   }
-  
 }  
 
 module.exports = ContainerController;
