@@ -7,8 +7,6 @@ const { execSync } = require('child_process');
 const multer = require('multer');
 const upload = multer({ dest: 'uploads/' });
 const { exec } = require('child_process');
-const { promisify } = require('util');
-const execPromise = promisify(exec);
 class ContainerController {
   constructor() {
     this.docker = docker;
@@ -499,8 +497,7 @@ server {
   
         const tarFilePath = path.join(path.dirname(renamedFilePath), `Dockerfile.tar`);
         const tarCommand = `tar -cvf ${tarFilePath} -C ${path.dirname(renamedFilePath)} Dockerfile`;
-        await execPromise(tarCommand);
-  
+        execSync(tarCommand);
         const tarStream = fs.createReadStream(tarFilePath);
         console.log(`Starting build for image ${imageName} from tar file ${tarFilePath}`);
         const buildStream = await docker.buildImage(tarStream, { t: imageName });
