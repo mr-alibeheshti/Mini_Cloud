@@ -471,6 +471,7 @@ server {
     }
   }
 
+  
   async buildImage(req, res) {
     const registry = "localhost:5000/";
     upload.single('file')(req, res, async (err) => {
@@ -480,8 +481,7 @@ server {
   
       console.log('Uploaded file info:', req.file);
   
-      const originalFilePath = req.file.path; 
-      const renamedFilePath = path.join(path.dirname(originalFilePath), 'Dockerfile'); 
+      const originalFilePath = req.file.path;
       if (!originalFilePath) {
         return res.status(400).send({ error: 'File not uploaded or file path is missing' });
       }
@@ -493,13 +493,9 @@ server {
           return res.status(400).send({ error: 'Uploaded file not found' });
         }
   
-        await fs.rename(originalFilePath, renamedFilePath);
+        console.log(`Starting build for image ${imageName} from tar file ${originalFilePath}`);
+        const tarStream = fs.createReadStream(originalFilePath);
   
-        const tarFilePath = path.join(path.dirname(renamedFilePath), `Dockerfile.tar`);
-        const tarCommand = `tar -cvf ${tarFilePath} -C ${path.dirname(renamedFilePath)} Dockerfile`;
-        execSync(tarCommand);
-        const tarStream = fs.createReadStream(tarFilePath);
-        console.log(`Starting build for image ${imageName} from tar file ${tarFilePath}`);
         const buildStream = await docker.buildImage(tarStream, { t: imageName });
   
         docker.modem.followProgress(buildStream, (err, output) => {
@@ -510,8 +506,8 @@ server {
   
           console.log(`Image ${imageName} built successfully`);
           execSync(`docker push ${imageName}`);
-          fs.remove(renamedFilePath).finally(() => {});
-          fs.remove(tarFilePath).finally(() => {
+  
+          fs.remove(originalFilePath).finally(() => {
             execSync(`docker run -d ${imageName}`);
             res.send({ message: `Image ${imageName} built successfully`, output });
           });
@@ -524,6 +520,7 @@ server {
       }
     });
   }
+  
 }  
 
 module.exports = ContainerController;

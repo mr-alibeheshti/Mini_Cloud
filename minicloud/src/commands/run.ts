@@ -5,8 +5,8 @@ import BaseCommand from '../base-command';
 
 export default class Run extends BaseCommand {
   static args = {
-    Image: Args.string({ description: 'Name of Docker Image in Docker Hub', required: true }),
     Domain: Args.string({ description: 'Domain name for the container', required: false }),
+    Image: Args.string({ description: 'Name of Docker Image in Docker Hub', required: true }),
   };
 
   static description = 'Run your Docker image from Docker Hub on the server with a domain';

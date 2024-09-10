@@ -11,7 +11,7 @@ export default class ExecShell extends Command {
 
   async run(): Promise<void> {
     const { args } = await this.parse(ExecShell);
-    const containerId = args.containerId;
+    const {containerId} = args;
 
     try {
       const ws = new WebSocket(`ws://localhost:3500/api/v1/container/shell/${containerId}`);
