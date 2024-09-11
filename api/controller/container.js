@@ -470,63 +470,107 @@ server {
       ws.close();
     }
   }
-
-  async buildImage(req, res) {
+  
+  
+  
+  async  buildImage(req, res) {
     const registry = "localhost:5000/";
-    const uploadpath = '/home/hajali/Desktop/Code/Mini_Cloud_1/api/uploads';
+    const baseUploadPath = '/home/hajali/Desktop/Code/Mini_Cloud_1/api/uploads';
+    const dockerfilePYPath = '/home/hajali/Desktop/Code/Mini_Cloud_1/api/DockerfilePY/Dockerfile';
+    const dockerfileJSPath = '/home/hajali/Desktop/Code/Mini_Cloud_1/api/DockerfileJS/Dockerfile';
   
     try {
+      console.log('Starting file upload...');
+  
       await new Promise((resolve, reject) => {
         upload.single('file')(req, res, (err) => {
-          if (err) return reject(err);
+          if (err) {
+            console.error('Error during file upload:', err); 
+            return reject(err);
+          }
+          console.log('File uploaded successfully.'); 
           resolve();
         });
       });
   
+      const appType = req.body.type;
+      console.log(`App type: ${appType}`);
+  
       if (!req.file || !req.file.path) {
+        console.error('File not uploaded or file path is missing');
         return res.status(400).send({ error: 'File not uploaded or file path is missing' });
       }
+  
+      
+      const timestamp = new Date().toISOString().replace(/[-:.T]/g, '');
+      const uploadPath = path.join(baseUploadPath, timestamp);
+  
+      console.log(`Creating directory at ${uploadPath}`); 
+      await fs.mkdir(uploadPath, { recursive: true });
   
       const originalFilePath = req.file.path;
       const imageName = `${registry}${req.body.imageName || 'my-image'}`;
   
+      console.log(`Extracting tar file to ${uploadPath}`); 
       await fs.access(originalFilePath);
-      await tar.extract({ file: originalFilePath, cwd: uploadpath });
+      await tar.extract({ file: originalFilePath, cwd: uploadPath });
+      console.log('Tar file extracted successfully.');
   
-      const dockerfilePath = path.join(uploadpath, 'Dockerfile');
-      await fs.access(dockerfilePath);
-  
-      console.log(`Dockerfile found, starting build for image ${imageName} from tar file ${originalFilePath}`);
       
-      const tarStream = fs.createReadStream(originalFilePath);
-      const buildStream = await docker.buildImage(tarStream, { t: imageName });
+      console.log(`Attempting to copy Dockerfile to: ${uploadPath}`);
   
-      await new Promise((resolve, reject) => {
-        docker.modem.followProgress(buildStream, (err, output) => {
-          if (err) return reject(err);
-          resolve(output);
-        });
-      });
-  
-      console.log(`Image ${imageName} built successfully`);
-      execSync(`docker push ${imageName}`);
-  
-      await fs.unlink(originalFilePath);
-      execSync(`docker run -d ${imageName}`);
       
-      res.send({ message: `Image ${imageName} built successfully` });
+      if (appType === 'python') {
+        console.log('App type is Python, copying DockerfilePY...');
+        try {
+          await fs.access(dockerfilePYPath);
+          await fs.copyFile(dockerfilePYPath, path.join(uploadPath, 'Dockerfile'));
+          console.log('DockerfilePY copied successfully.');
+        } catch (err) {
+          console.error(`Error copying DockerfilePY: ${err.message}`);
+          return res.status(500).send({ error: `Error copying DockerfilePY: ${err.message}` });
+        }
+      } else if (appType === 'nodejs') {
+        console.log('App type is Node.js, copying DockerfileJS...');
+        try {
+          await fs.access(dockerfileJSPath);
+          await fs.copyFile(dockerfileJSPath, path.join(uploadPath, 'Dockerfile'));
+          console.log('DockerfileJS copied successfully.');
+        } catch (err) {
+          console.error(`Error copying DockerfileJS: ${err.message}`);
+          return res.status(500).send({ error: `Error copying DockerfileJS: ${err.message}` });
+        }
+      }
+  
+      console.log(`Building Docker image for ${appType}...`);
+      execSync(`docker build -t ${imageName} ${uploadPath}`);
+      if (appType === 'python') {
+        execSync(`docker run -d ${imageName} python main.py`);
+      } else if (appType === 'nodejs') {
+        execSync(`docker run -d ${imageName} node index.js`);
+      }
+  
+      console.log(`Image ${imageName} built and run successfully.`);
+      res.send({ message: `Image ${imageName} built and run successfully with ${appType}` });
   
     } catch (err) {
       console.error(`Error during build process: ${err.message}`);
       res.status(500).send({ error: `Error building image: ${err.message}` });
     } finally {
       try {
-        await fs.rm(uploadpath, { recursive: true, force: true });
-        console.log(`${uploadpath} is deleted successfully!`);
+        console.log(`Cleaning up temporary files...`);
+        await fs.rm(req.file.path);
       } catch (err) {
-        console.error(`Error while deleting ${uploadpath}:`, err);
+        console.error(`Error while cleaning up:`, err);
       }
     }
   }
+  
+  
+  
+  
+  
+  
 }  
+
 module.exports = ContainerController;

@@ -21,19 +21,49 @@ export default class Build extends BaseCommand {
 
     try {
       this.log("Starting to tar the directory and upload...");
+      const dockerfilePath = path.join(dirPath, 'Dockerfile');
+      const packageJsonPath = path.join(dirPath, 'package.json');
+      const requirementsPath = path.join(dirPath, 'requirements.txt');
+      
+      let foundFile = false;
+      let appType:string = '';
 
+      try {
+        await fs.promises.access(dockerfilePath);
+        appType = 'Dockerfile';
+        foundFile = true;
+        this.log('Dockerfile found.');
+      } catch {}
+
+      try {
+        await fs.promises.access(packageJsonPath);
+        appType = 'nodejs';
+        foundFile = true;
+        this.log('package.json found.');
+      } catch {}
+
+      try {
+        await fs.promises.access(requirementsPath);
+        appType = 'python';
+        foundFile = true;
+        this.log('requirements.txt found.');
+      } catch {}
+
+      if (!foundFile) {
+        this.error('No Dockerfile, package.json, or requirements.txt found in the specified directory.');
+        return;
+      }
       const tarFilePath = path.join(path.dirname(dirPath), 'dockerfile.tar');
       await create({
         cwd: dirPath,
         file: tarFilePath,
-        gzip: false,
-        noDirRecurse: false,  
+        gzip: true,
         portable: true,  
       }, ['.']);  
-
       const form = new FormData();
       form.append('file', fs.createReadStream(tarFilePath));  
       form.append('imageName', imageName);
+      form.append('type', appType);
 
       const response = await axios.post('http://api.minicloud.local/api/v1/container/build', form, {
         headers: {
