@@ -214,8 +214,8 @@ server {
       await fs.symlink(sslNginxConfigPath, sslNginxConfigLink);
       console.log(`Nginx SSL configuration symlink created at ${sslNginxConfigLink}`);
 
-      execSync('sudo nginx -t');
-      execSync('sudo systemctl reload nginx');
+      execSync(' nginx -t');
+      execSync(' systemctl reload nginx');
       console.log(`Nginx reloaded and ${domain} is now accessible via HTTPS.`);
     } catch (err) {
       console.error(`Failed to set up Nginx SSL for ${domain}:`, err.message);

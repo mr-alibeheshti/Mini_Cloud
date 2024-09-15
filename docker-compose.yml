@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   loki:
     user: root
@@ -53,7 +55,7 @@ services:
       - default
 
   cadvisor:
-    image: gcr.io/cadvisor/cadvisor:latest
+    image: abeheshti127/cadvisor
     container_name: cadvisor
     ports:
       - 8080:8080
@@ -64,10 +66,29 @@ services:
     networks:
       - default
 
-volumes:
-  loki-storage:
-  grafana-storage:
+  api:
+    user: root
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    ports:
+      - "3500:3500"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./api:/app
+      - /etc/nginx/ssl:/etc/nginx/ssl
+      - /etc/nginx/sites-available:/etc/nginx/sites-available
+      - /etc/nginx/sites-enabled:/etc/nginx/sites-enabled
+      - /etc/hosts:/etc/hosts
+    depends_on:
+      - redis
+    networks:
+      - default
 
 networks:
   default:
     driver: bridge
+
+volumes:
+  loki-storage:
+  grafana-storage:

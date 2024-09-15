@@ -5,8 +5,8 @@ import BaseCommand from '../base-command';
 
 export default class Run extends BaseCommand {
   static args = {
-    Domain: Args.string({ description: 'Domain name for the container', required: false }),
     Image: Args.string({ description: 'Name of Docker Image in Docker Hub', required: true }),
+    Domain: Args.string({ description: 'Domain name for the container', required: false }),
   };
 
   static description = 'Run your Docker image from Docker Hub on the server with a domain';
@@ -42,7 +42,7 @@ export default class Run extends BaseCommand {
     const volume = flags.volume ? `&volume=${encodeURIComponent(flags.volume)}` : '';
     const environment = flags.environment ? `&environment=${encodeURIComponent(flags.environment)}` : '';
 
-    const url = `http://api.minicloud.local/api/v1/run?imageName=${imageName}&domain=${domain}&hostPort=${hostPort}&containerPort=${containerPort}${cpu}${memory}${volume}${environment}`;
+    const url = `http://localhost:3500/api/v1/run?imageName=${imageName}&domain=${domain}&hostPort=${hostPort}&containerPort=${containerPort}${cpu}${memory}${volume}${environment}`;
     
     try {
       const response = await axios.post(url);
