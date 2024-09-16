@@ -135,7 +135,7 @@ class RunController {
         throw new Error(`Failed to add domain to ${hostsFilePath}: ${err.message}`);
       }
 
-      await this.setupNginxAndSSL(domain, hostPort);
+      await this.setupNginx(domain, hostPort);
 
       const container = await docker.createContainer({
         Image: imageName,
@@ -151,47 +151,38 @@ class RunController {
       });
 
       await container.start();
-      return { message: `Container started successfully. Your container is accessible at https://${domain}`, containerId: container.id };
+      return { message: `Container started successfully. Your container is accessible at http://${domain}`, containerId: container.id };
 
     } catch (err) {
       throw new Error(`Error running container: ${err.message}`);
     }
   }
 
-  async setupNginxAndSSL(domain, hostPort) {
+  async setupNginx(domain, hostPort) {
     const nginxAvailablePath = '/etc/nginx/sites-available';
     const nginxEnabledPath = '/etc/nginx/sites-enabled';
-
+  
     await fs.ensureDir(nginxAvailablePath);
     await fs.ensureDir(nginxEnabledPath);
-
-    const nginxConfigLink = path.join(nginxEnabledPath, domain);
-
+  
+    const nginxConfigLinkPath = path.join(nginxEnabledPath, domain);
+  
     try {
-      if (fs.existsSync(nginxConfigLink)) {
-        await fs.unlink(nginxConfigLink);
+      if (fs.existsSync(nginxConfigLinkPath)) {
+        await fs.unlink(nginxConfigLinkPath);
       }
-
     } catch (err) {
       console.error(`Failed to set up Nginx for ${domain}:`, err.message);
       throw new Error(`Failed to set up Nginx for ${domain}: ${err.message}`);
     }
-
-    const certPath = `/etc/nginx/ssl/${domain}`;
-    await fs.ensureDir(certPath);
-    execSync(`mkcert -key-file ${certPath}/key.pem -cert-file ${certPath}/cert.pem ${domain}`);
-    console.log(`SSL certificate created for domain ${domain} at ${certPath}.`);
-
-    const sslNginxConfig = `
+  
+    const nginxConfig = `
 server {
-    listen 443 ssl;
+    listen 80;
     server_name ${domain};
 
-    ssl_certificate ${certPath}/cert.pem;
-    ssl_certificate_key ${certPath}/key.pem;
-
     location / {
-        proxy_pass http://localhost:${hostPort};
+        proxy_pass http://${domain}:${hostPort};
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -199,27 +190,35 @@ server {
     }
 }
 `;
-
-    const sslNginxConfigPath = path.join(nginxAvailablePath, `${domain}`);
-    const sslNginxConfigLink = path.join(nginxEnabledPath, `${domain}`);
-
+  
+    const nginxConfigPath = path.join(nginxAvailablePath, `${domain}`);
+    const nginxEnabledConfigLink = path.join(nginxEnabledPath, `${domain}`);
+  
     try {
-      if (fs.existsSync(sslNginxConfigLink)) {
-        await fs.unlink(sslNginxConfigLink);
+      if (fs.existsSync(nginxEnabledConfigLink)) {
+        await fs.unlink(nginxEnabledConfigLink);
       }
+  
+      await fs.writeFile(nginxConfigPath, nginxConfig);
+      console.log(`Nginx configuration for ${domain} created at ${nginxConfigPath}`);
+  
+      await fs.symlink(nginxConfigPath, nginxEnabledConfigLink);
+      console.log(`Nginx configuration symlink created at ${nginxEnabledConfigLink}`);
+  
+      execSync('nginx -t');
+      execSync('sudo systemctl restart nginx.service', (error, stdout, stderr) => {
+        if (error) {
+          console.error(`exec error: ${error}`);
+          return;
+        }
+        console.log(`stdout: ${stdout}`);
+        console.error(`stderr: ${stderr}`);
+        console.log(`Nginx reloaded and ${domain} is now accessible.`);
+      });
 
-      await fs.writeFile(sslNginxConfigPath, sslNginxConfig);
-      console.log(`Nginx SSL configuration for ${domain} created at ${sslNginxConfigPath}`);
-
-      await fs.symlink(sslNginxConfigPath, sslNginxConfigLink);
-      console.log(`Nginx SSL configuration symlink created at ${sslNginxConfigLink}`);
-
-      execSync(' nginx -t');
-      execSync(' systemctl reload nginx');
-      console.log(`Nginx reloaded and ${domain} is now accessible via HTTPS.`);
     } catch (err) {
-      console.error(`Failed to set up Nginx SSL for ${domain}:`, err.message);
-      throw new Error(`Failed to set up Nginx SSL for ${domain}: ${err.message}`);
+      console.error(`Failed to set up Nginx for ${domain}:`, err.message);
+      throw new Error(`Failed to set up Nginx for ${domain}: ${err.message}`);
     }
   }
 }

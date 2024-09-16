@@ -15,6 +15,6 @@ router.post('/update/:containerId', (req, res, next) => containerController.upda
 router.post('/log/:containerId', (req, res, next) => containerController.log(req, res, next));
 router.post('/stat/:containerId', (req, res, next) => containerController.stat(req, res, next));
 router.post('/change-domain', (req, res, next) => containerController.changeDomain(req, res, next));
-router.post('/build', (req, res, next) => containerController.buildImage(req, res, next));
+router.post('/build', (req, res, next) => containerController.buildAndPushImage(req, res, next));
 
 module.exports = router;

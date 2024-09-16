@@ -22,7 +22,7 @@ export default class AddVolume extends BaseCommand {
     if (flags.mountPoint) queryParams.push(`mountPoint=${flags.mountPoint}`);
     if (flags.SizeLimit) queryParams.push(`sizelimit=${flags.SizeLimit}`);
 
-    const url = `http://api.minicloud.local/api/v1/volume/add/${args.name}${queryParams.length > 0 ? '?' + queryParams.join('&') : ''}`;
+    const url = `http://localhost:3500/api/v1/volume/add/${args.name}${queryParams.length > 0 ? '?' + queryParams.join('&') : ''}`;
     console.log('Request URL:', url);
 
     try {

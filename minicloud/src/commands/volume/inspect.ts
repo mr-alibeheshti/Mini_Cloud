@@ -13,7 +13,7 @@ export default class InspectVolume extends BaseCommand {
   async run(): Promise<void> {
     const { args } = await this.parse(InspectVolume);
 
-    const url = `http://api.minicloud.local/api/v1/volume/inspect/${args.name}`;
+    const url = `http://localhost:3500/api/v1/volume/inspect/${args.name}`;
     
     try {
       const response = await axios.get(url);

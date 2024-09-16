@@ -14,7 +14,7 @@ export default class Stop extends BaseCommand {
     const { args } = await this.parse(Stop);
 
     try {
-      const response = await axios.post(`http://api.minicloud.local/api/v1/container/stop/${args.ContainerId}`);
+      const response = await axios.post(`http://localhost:3500/api/v1/container/stop/${args.ContainerId}`);
       this.log('Response data:', response.data.message);
     } catch (error: any) {
       this.handleError(error);

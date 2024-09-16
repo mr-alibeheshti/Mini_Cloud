@@ -18,7 +18,7 @@ export default class ChangeDomain extends BaseCommand {
     const newDomain = encodeURIComponent(args.newDomain);
 
     try {
-      const response = await axios.post(`http://api.minicloud.local/api/v1/container/change-domain`, {
+      const response = await axios.post(`http://localhost:3500/api/v1/container/change-domain`, {
         currentDomain,
         newDomain,
       });

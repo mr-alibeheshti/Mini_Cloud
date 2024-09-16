@@ -13,7 +13,7 @@ export default class RemoveVolume extends BaseCommand {
   async run(): Promise<void> {
     const { args } = await this.parse(RemoveVolume);
 
-    const url = `http://api.minicloud.local/api/v1/volume/remove/${args.name}`;
+    const url = `http://localhost:3500/api/v1/volume/remove/${args.name}`;
     
     try {
       const response = await axios.post(url);

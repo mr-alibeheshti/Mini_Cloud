@@ -76,14 +76,17 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./api:/app
-      - /etc/nginx/ssl:/etc/nginx/ssl
       - /etc/nginx/sites-available:/etc/nginx/sites-available
       - /etc/nginx/sites-enabled:/etc/nginx/sites-enabled
+      - /etc/nginx/nginx.conf:/etc/nginx/nginx.conf
       - /etc/hosts:/etc/hosts
+      - /run/systemd/system:/run/systemd/system
+      - /var/run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket
     depends_on:
       - redis
     networks:
       - default
+    privileged: true
 
 networks:
   default:

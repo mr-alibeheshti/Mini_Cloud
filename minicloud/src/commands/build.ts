@@ -65,7 +65,7 @@ export default class Build extends BaseCommand {
       form.append('imageName', imageName);
       form.append('type', appType);
 
-      const response = await axios.post('http://api.minicloud.local/api/v1/container/build', form, {
+      const response = await axios.post('http://localhost:3500/api/v1/container/build', form, {
         headers: {
           ...form.getHeaders(),
         }
