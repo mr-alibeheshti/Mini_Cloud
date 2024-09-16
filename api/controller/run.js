@@ -75,11 +75,9 @@ class RunController {
     }
   }
   
-
   async runService(imageName, hostPort, containerPort, domain, query) {
     const cpuPercent = query.cpu ?? 10;
     const cpuLimit = Math.round(cpuPercent * 100000000);
-  
     const memoryBytes = (query.memory ? parseInt(query.memory) * 1024 * 1024 : 512 * 1024 * 1024);
   
     let volumeBindings = [];
@@ -126,10 +124,12 @@ class RunController {
         throw new Error(`Failed to add domain to ${hostsFilePath}: ${err.message}`);
       }
   
-      await this.setupNginx(domain, hostPort);
+      const serviceName = `my_service_${this.generateRandomSubdomain()}`;
+      await this.addUpstreamConfig(serviceName, hostPort);
+      await this.setupNginx(domain, serviceName);
   
       const service = await docker.createService({
-        Name: `my_service_${this.generateRandomSubdomain()}`,
+        Name: serviceName,
         TaskTemplate: {
           ContainerSpec: {
             Image: imageName,
@@ -165,33 +165,45 @@ class RunController {
       throw new Error(`Error running service: ${err.message}`);
     }
   }
-  
-  
 
-  async setupNginx(domain, hostPort) {
+  async addUpstreamConfig(serviceName, hostPort) {
+    const nginxConfPath = '/etc/nginx/nginx.conf';
+    const upstreamConfig = `
+upstream ${serviceName} {
+    server 192.168.100.204:${hostPort};
+    server 192.168.100.120:${hostPort};
+}
+`;
+
+    try {
+      const nginxConfContent = await fs.readFile(nginxConfPath, 'utf8');
+      if (!nginxConfContent.includes(`upstream ${serviceName}`)) {
+        const newNginxConfContent = nginxConfContent.replace(/http {/, `http {\n${upstreamConfig}`);
+        await fs.writeFile(nginxConfPath, newNginxConfContent);
+        console.log(`Added upstream ${serviceName} to nginx.conf`);
+      }
+    } catch (err) {
+      throw new Error(`Failed to update nginx.conf: ${err.message}`);
+    }
+  }
+
+  async setupNginx(domain, serviceName) {
     const nginxAvailablePath = '/etc/nginx/sites-available';
     const nginxEnabledPath = '/etc/nginx/sites-enabled';
   
     await fs.mkdir(nginxAvailablePath, { recursive: true });
     await fs.mkdir(nginxEnabledPath, { recursive: true });
-  
-    const nginxConfigLinkPath = path.join(nginxEnabledPath, domain);
-  
-    try {
-      if (await fs.stat(nginxConfigLinkPath).catch(() => false)) {
-        await fs.unlink(nginxConfigLinkPath);
-      }
-    } catch (err) {
-      throw new Error(`Failed to set up Nginx for ${domain}: ${err.message}`);
-    }
-  
+
+    const nginxConfigPath = path.join(nginxAvailablePath, domain);
+    const nginxConfigLink = path.join(nginxEnabledPath, domain);
+
     const nginxConfig = `
 server {
     listen 80;
     server_name ${domain};
 
     location / {
-        proxy_pass http://${domain}:${hostPort};
+        proxy_pass http://${serviceName};
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -199,18 +211,15 @@ server {
     }
 }
 `;
-  
-    const nginxConfigPath = path.join(nginxAvailablePath, `${domain}`);
-    const nginxEnabledConfigLink = path.join(nginxEnabledPath, `${domain}`);
-  
+
     try {
-      if (await fs.stat(nginxEnabledConfigLink).catch(() => false)) {
-        await fs.unlink(nginxEnabledConfigLink);
+      if (await fs.stat(nginxConfigLink).catch(() => false)) {
+        await fs.unlink(nginxConfigLink);
       }
-  
+
       await fs.writeFile(nginxConfigPath, nginxConfig);
-      await fs.symlink(nginxConfigPath, nginxEnabledConfigLink);
-  
+      await fs.symlink(nginxConfigPath, nginxConfigLink);
+
       exec('nginx -t', (error, stdout, stderr) => {
         if (error) {
           console.error(`Nginx test error: ${error.message}`);
@@ -221,7 +230,7 @@ server {
           return;
         }
         console.log(`Nginx test stdout: ${stdout}`);
-  
+
         exec('sudo systemctl restart nginx.service', (error, stdout, stderr) => {
           if (error) {
             console.error(`Restart error: ${error.message}`);
