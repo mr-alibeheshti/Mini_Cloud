@@ -1,7 +1,7 @@
 const Docker = require('dockerode');
-const fs = require('fs-extra');
+const fs = require('fs').promises;
 const path = require('path');
-const { execSync } = require('child_process');
+const { exec } = require('child_process');
 const net = require('net');
 
 const docker = new Docker({ socketPath: '/var/run/docker.sock' });
@@ -21,7 +21,8 @@ class RunController {
     const nginxConfigPath = path.join(nginxAvailablePath, domain);
     const nginxConfigLink = path.join(nginxEnabledPath, domain);
 
-    return fs.existsSync(nginxConfigPath) || fs.existsSync(nginxConfigLink);
+    return fs.access(nginxConfigPath).then(() => true).catch(() => false) ||
+           fs.access(nginxConfigLink).then(() => true).catch(() => false);
   }
 
   async isPortInUse(port) {
@@ -51,58 +52,55 @@ class RunController {
   async run(req, res, next) {
     try {
       const { imageName, hostPort, containerPort, cpu, volume, environment, memory, domain } = req.query;
-
+  
       if (!imageName) {
         return res.status(400).send({ error: 'Image name is required.' });
       }
-
+  
       if (!hostPort || !containerPort) {
         return res.status(400).send({ error: 'Both hostPort and containerPort are required.' });
       }
-
+  
       const domainInUse = await this.isDomainInUse(domain, hostPort);
       if (domain && domainInUse) {
         return res.status(400).send({ error: `Domain ${domain} is already in use. Please choose a different domain.` });
       }
-
+  
       const query = { cpu, volume, environment, memory };
-      const data = await this.runContainer(imageName, hostPort, containerPort, domain, query);
-
+      const data = await this.runService(imageName, hostPort, containerPort, domain, query);
+  
       res.send(data);
     } catch (err) {
       res.status(500).send({ error: err.message });
     }
   }
+  
 
-  async runContainer(imageName, hostPort, containerPort, domain, query) {
-    console.log("Received domain in runContainer method:", domain);
-
+  async runService(imageName, hostPort, containerPort, domain, query) {
     const cpuPercent = query.cpu ?? 10;
-    const cpuPeriod = 1000000;
-    const cpuQuota = Math.round((cpuPeriod * cpuPercent) / 100);
-
-    let memoryBytes = (query.memory ? parseInt(query.memory) * 1024 * 1024 : 512 * 1024 * 1024);
-
+    const cpuLimit = Math.round(cpuPercent * 100000000);
+  
+    const memoryBytes = (query.memory ? parseInt(query.memory) * 1024 * 1024 : 512 * 1024 * 1024);
+  
     let volumeBindings = [];
     if (query.volume) {
       const volumes = query.volume.split(',');
       volumes.forEach(volume => {
         const [hostPath, containerPath] = volume.split(':');
         if (hostPath && containerPath) {
-          volumeBindings.push(`${hostPath}:${containerPath}`);
+          volumeBindings.push({ Type: 'bind', Source: hostPath, Target: containerPath });
         } else {
           throw new Error('Invalid volume format. Use the format hostPath:containerPath.');
         }
       });
     }
-
+  
     try {
       await new Promise((resolve, reject) => {
         docker.pull(imageName, (err, stream) => {
           if (err) {
             return reject(err);
           }
-
           docker.modem.followProgress(stream, (err) => {
             if (err) {
               return reject(err);
@@ -111,68 +109,79 @@ class RunController {
           });
         });
       });
-
+  
       if (!domain) {
         domain = `${this.generateRandomSubdomain()}.minicloud.local`;
-        console.log("Generated random subdomain:", domain);
-      } else {
-        console.log("Using provided domain:", domain);
       }
-
+  
       const hostsFilePath = '/etc/hosts';
       const domainEntry = `127.0.0.1 ${domain}`;
-
+  
       try {
         const hostsFileContent = await fs.readFile(hostsFilePath, 'utf8');
-        if (hostsFileContent.includes(domainEntry)) {
-          console.log(`Domain ${domain} already exists in ${hostsFilePath}.`);
-        } else {
+        if (!hostsFileContent.includes(domainEntry)) {
           await fs.appendFile(hostsFilePath, `\n${domainEntry}`);
-          console.log(`Domain ${domain} added to ${hostsFilePath}`);
         }
       } catch (err) {
-        console.error(`Failed to add domain to ${hostsFilePath}:`, err.message);
         throw new Error(`Failed to add domain to ${hostsFilePath}: ${err.message}`);
       }
-
+  
       await this.setupNginx(domain, hostPort);
-
-      const container = await docker.createContainer({
-        Image: imageName,
-        ExposedPorts: { [`${containerPort}/tcp`]: {} },
-        HostConfig: {
-          PortBindings: { [`${containerPort}/tcp`]: [{ HostPort: hostPort }] },
-          CpuQuota: cpuQuota,
-          CpuPeriod: cpuPeriod,
-          Binds: volumeBindings,
-          Memory: memoryBytes,
+  
+      const service = await docker.createService({
+        Name: `my_service_${this.generateRandomSubdomain()}`,
+        TaskTemplate: {
+          ContainerSpec: {
+            Image: imageName,
+            Env: query.environment ? query.environment.split(',').map((env) => env.trim()) : [],
+            Mounts: volumeBindings,
+          },
+          Resources: {
+            Limits: {
+              MemoryBytes: memoryBytes,
+              NanoCPUs: cpuLimit,
+            },
+          },
         },
-        Env: query.environment ? query.environment.split(',').map((env) => env.trim()) : [],
+        EndpointSpec: {
+          Ports: [
+            {
+              Protocol: 'tcp',
+              TargetPort: parseInt(containerPort),
+              PublishedPort: parseInt(hostPort),
+            },
+          ],
+        },
+        Mode: {
+          Replicated: {
+            Replicas: 1,
+          },
+        },
       });
-
-      await container.start();
-      return { message: `Container started successfully. Your container is accessible at http://${domain}`, containerId: container.id };
-
+  
+      return { message: `Service created successfully. Your service is accessible at http://${domain}`, serviceId: service.id };
+  
     } catch (err) {
-      throw new Error(`Error running container: ${err.message}`);
+      throw new Error(`Error running service: ${err.message}`);
     }
   }
+  
+  
 
   async setupNginx(domain, hostPort) {
     const nginxAvailablePath = '/etc/nginx/sites-available';
     const nginxEnabledPath = '/etc/nginx/sites-enabled';
   
-    await fs.ensureDir(nginxAvailablePath);
-    await fs.ensureDir(nginxEnabledPath);
+    await fs.mkdir(nginxAvailablePath, { recursive: true });
+    await fs.mkdir(nginxEnabledPath, { recursive: true });
   
     const nginxConfigLinkPath = path.join(nginxEnabledPath, domain);
   
     try {
-      if (fs.existsSync(nginxConfigLinkPath)) {
+      if (await fs.stat(nginxConfigLinkPath).catch(() => false)) {
         await fs.unlink(nginxConfigLinkPath);
       }
     } catch (err) {
-      console.error(`Failed to set up Nginx for ${domain}:`, err.message);
       throw new Error(`Failed to set up Nginx for ${domain}: ${err.message}`);
     }
   
@@ -195,29 +204,38 @@ server {
     const nginxEnabledConfigLink = path.join(nginxEnabledPath, `${domain}`);
   
     try {
-      if (fs.existsSync(nginxEnabledConfigLink)) {
+      if (await fs.stat(nginxEnabledConfigLink).catch(() => false)) {
         await fs.unlink(nginxEnabledConfigLink);
       }
   
       await fs.writeFile(nginxConfigPath, nginxConfig);
-      console.log(`Nginx configuration for ${domain} created at ${nginxConfigPath}`);
-  
       await fs.symlink(nginxConfigPath, nginxEnabledConfigLink);
-      console.log(`Nginx configuration symlink created at ${nginxEnabledConfigLink}`);
   
-      execSync('nginx -t');
-      execSync('sudo systemctl restart nginx.service', (error, stdout, stderr) => {
+      exec('nginx -t', (error, stdout, stderr) => {
         if (error) {
-          console.error(`exec error: ${error}`);
+          console.error(`Nginx test error: ${error.message}`);
           return;
         }
-        console.log(`stdout: ${stdout}`);
-        console.error(`stderr: ${stderr}`);
-        console.log(`Nginx reloaded and ${domain} is now accessible.`);
+        if (stderr) {
+          console.error(`Nginx test stderr: ${stderr}`);
+          return;
+        }
+        console.log(`Nginx test stdout: ${stdout}`);
+  
+        exec('sudo systemctl restart nginx.service', (error, stdout, stderr) => {
+          if (error) {
+            console.error(`Restart error: ${error.message}`);
+            return;
+          }
+          if (stderr) {
+            console.error(`Restart stderr: ${stderr}`);
+            return;
+          }
+          console.log(`Nginx restarted successfully. ${domain} is now accessible.`);
+        });
       });
 
     } catch (err) {
-      console.error(`Failed to set up Nginx for ${domain}:`, err.message);
       throw new Error(`Failed to set up Nginx for ${domain}: ${err.message}`);
     }
   }
