@@ -361,7 +361,7 @@ server {
 
   async inspectContainer(containerId) {
     return new Promise((resolve, reject) => {
-      const container = docker.getContainer(containerId);
+      const container = docker.getService(containerId);
       container.inspect((err, data) => {
         if (err) return reject(err);
         resolve(data);
@@ -371,7 +371,7 @@ server {
 
   async stopContainer(containerId) {
     return new Promise((resolve, reject) => {
-      const container = docker.getContainer(containerId);
+      const container = docker.getService(containerId);
       container.stop((err) => {
         if (err) return reject(err);
         resolve();
@@ -381,7 +381,7 @@ server {
 
   async removeContainer(containerId, force) {
     return new Promise((resolve, reject) => {
-      const container = docker.getContainer(containerId);
+      const container = docker.getService(containerId);
       container.remove({ force }, (err) => {
         if (err) return reject(err);
         resolve();
@@ -477,7 +477,7 @@ server {
   async buildAndPushImage(req, res) {
       const registry = "reg.technosit.ir/";
       const baseUploadPath = '/home/hajali/Desktop/Code/Mini_Cloud_1/api/uploads';
-      const dockerfilePYPath = '/home/hajali/Desktop/Code/Mini_Cloud_1/api/DockerfilePY/Dockerfile';
+      const dockerfilePYPath = path.join(__dirname, '../DockerfilePY/Dockerfile');
       const dockerfileJSPath = path.join(__dirname, '../DockerfileJS/Dockerfile');
   
       try {

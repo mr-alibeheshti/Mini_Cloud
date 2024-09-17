@@ -172,6 +172,7 @@ class RunController {
 upstream ${serviceName} {
     server 192.168.100.204:${hostPort};
     server 192.168.100.120:${hostPort};
+    server 192.168.100.111:${hostPort};
 }
 `;
 
