@@ -1,7 +1,7 @@
 const Docker = require('dockerode');
 const fs = require('fs').promises;
 const path = require('path');
-const { exec } = require('child_process');
+const { exec,execSync } = require('child_process');
 const net = require('net');
 
 const docker = new Docker({ socketPath: '/var/run/docker.sock' });
@@ -191,27 +191,32 @@ upstream ${serviceName} {
   async setupNginx(domain, serviceName) {
     const nginxAvailablePath = '/etc/nginx/sites-available';
     const nginxEnabledPath = '/etc/nginx/sites-enabled';
-  
+    const PubKey = "/etc/nginx/ssl/_wildcard.minicloud.local.pem"
+    const PrivateKey = "/etc/nginx/ssl/_wildcard.minicloud.local-key.pem"
+
     await fs.mkdir(nginxAvailablePath, { recursive: true });
     await fs.mkdir(nginxEnabledPath, { recursive: true });
 
     const nginxConfigPath = path.join(nginxAvailablePath, domain);
     const nginxConfigLink = path.join(nginxEnabledPath, domain);
 
-    const nginxConfig = `
-server {
-    listen 80;
-    server_name ${domain};
-
-    location / {
-        proxy_pass http://${serviceName};
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-`;
+    const nginxConfig =
+     `server {
+        listen 443 ssl;
+        server_name ${domain};
+    
+        ssl_certificate ${PubKey};
+        ssl_certificate_key ${PrivateKey};
+    
+        location / {
+            proxy_pass http://${serviceName};
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+    }`;
+    
 
     try {
       if (await fs.stat(nginxConfigLink).catch(() => false)) {
@@ -232,7 +237,7 @@ server {
         }
         console.log(`Nginx test stdout: ${stdout}`);
 
-        exec('sudo systemctl restart nginx.service', (error, stdout, stderr) => {
+        exec(' systemctl restart nginx.service', (error, stdout, stderr) => {
           if (error) {
             console.error(`Restart error: ${error.message}`);
             return;
