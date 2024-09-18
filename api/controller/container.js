@@ -12,111 +12,112 @@ class ContainerController {
     this.docker = docker;
   }
   async changeDomain(req, res) {
-    const { currentDomain, newDomain } = req.body;
-
-    if (!currentDomain || !newDomain) {
-      return res.status(400).send({ error: 'Both currentDomain and newDomain are required.' });
+    const { currentDomain, newDomain,serviceName} = req.body;
+    if (!currentDomain || !newDomain || !serviceName) {
+      return res.status(400).send({ error: 'currentDomain, newDomain and serviceName are required.' });
     }
-
+  
     try {
       const formattedCurrentDomain = currentDomain;
       const formattedNewDomain = newDomain;
-
+  
       const hostsFilePath = '/etc/hosts';
       let hostsFileContent = await fs.readFile(hostsFilePath, 'utf8');
-
+  
       if (!hostsFileContent.includes(formattedCurrentDomain)) {
         return res.status(400).send({ error: `Domain ${formattedCurrentDomain} not found in ${hostsFilePath}` });
       }
-
+  
       hostsFileContent = hostsFileContent.replace(new RegExp(`127.0.0.1 ${formattedCurrentDomain}`, 'g'), `127.0.0.1 ${formattedNewDomain}`);
       await fs.writeFile(hostsFilePath, hostsFileContent);
       console.log(`Updated domain in ${hostsFilePath}`);
-
+  
       const nginxAvailablePath = '/etc/nginx/sites-available';
       const nginxEnabledPath = '/etc/nginx/sites-enabled';
       const currentNginxConfigPath = path.join(nginxAvailablePath, formattedCurrentDomain);
       const newNginxConfigPath = path.join(nginxAvailablePath, formattedNewDomain);
       const currentNginxConfigLink = path.join(nginxEnabledPath, formattedCurrentDomain);
       const newNginxConfigLink = path.join(nginxEnabledPath, formattedNewDomain);
-
+  
       if (fs.existsSync(currentNginxConfigLink)) {
         await fs.unlink(currentNginxConfigLink);
         console.log(`Removed old Nginx symlink at ${currentNginxConfigLink}`);
       }
-
+  
       if (fs.existsSync(newNginxConfigLink)) {
         await fs.unlink(newNginxConfigLink);
         console.log(`Removed existing Nginx symlink at ${newNginxConfigLink}`);
       }
-
+  
       if (!fs.existsSync(currentNginxConfigPath)) {
         return res.status(400).send({ error: `Nginx configuration for ${formattedCurrentDomain} not found.` });
       }
-
+  
       let nginxConfigContent = await fs.readFile(currentNginxConfigPath, 'utf8');
-
-      const portMatch = nginxConfigContent.match(/proxy_pass http:\/\/localhost:(\d+);/);
-      if (!portMatch) {
-        return res.status(400).send({ error: 'Could not find port in the current Nginx configuration.' });
-      }
-      const currentPort = portMatch[1];
-
-      nginxConfigContent = nginxConfigContent
-        .replace(new RegExp(formattedCurrentDomain, 'g'), formattedNewDomain)
-        .replace(`proxy_pass http://localhost:${currentPort};`, `proxy_pass http://localhost:${currentPort};`);
-
+  
+      nginxConfigContent = nginxConfigContent.replace(new RegExp(formattedCurrentDomain, 'g'), formattedNewDomain);
+  
       await fs.writeFile(newNginxConfigPath, nginxConfigContent);
       console.log(`Created new Nginx config at ${newNginxConfigPath}`);
-
+  
       await fs.symlink(newNginxConfigPath, newNginxConfigLink);
       console.log(`Created new Nginx symlink at ${newNginxConfigLink}`);
-
+  
       const certPath = `/etc/nginx/ssl/${formattedNewDomain}`;
       await fs.ensureDir(certPath);
-
+  
       const certFile = path.join(certPath, 'cert.pem');
       const keyFile = path.join(certPath, 'key.pem');
-
+  
       if (!fs.existsSync(certFile) || !fs.existsSync(keyFile)) {
         execSync(`mkcert -key-file ${keyFile} -cert-file ${certFile} ${formattedNewDomain}`);
         console.log(`SSL certificate created for domain ${formattedNewDomain} at ${certPath}.`);
       } else {
         console.log(`SSL certificate already exists for domain ${formattedNewDomain}.`);
       }
-
+  
       const sslNginxConfig = `
-server {
-    listen 443 ssl;
-    server_name ${formattedNewDomain};
-
-    ssl_certificate ${certFile};
-    ssl_certificate_key ${keyFile};
-
-    location / {
-        proxy_pass http://localhost:${currentPort};
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-`;
-
+  server {
+      listen 443 ssl;
+      server_name ${formattedNewDomain};
+  
+      ssl_certificate ${certFile};
+      ssl_certificate_key ${keyFile};
+  
+      location / {
+          proxy_pass http://${serviceName};
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto $scheme;
+      }
+  }
+  `;
+  
       const sslNginxConfigPath = path.join(nginxAvailablePath, `${formattedNewDomain}`);
       await fs.writeFile(sslNginxConfigPath, sslNginxConfig);
       console.log(`Nginx SSL configuration for ${formattedNewDomain} created at ${sslNginxConfigPath}`);
-
-      execSync('sudo nginx -t');
-      execSync('sudo nginx -s reload');
-      console.log('Nginx reloaded');
-
+  
+      execSync(c'sudo nginx -t');
+      execSync(' systemctl restart nginx.service', (error, stdout, stderr) => {
+        if (error) {
+          console.error(`Restart error: ${error.message}`);
+          return;
+        }
+        if (stderr) {
+          console.error(`Restart stderr: ${stderr}`);
+          return;
+        }
+        console.log(`Nginx restarted successfully. ${domain} is now accessible.`);
+      });      console.log('Nginx reloaded');
+  
       res.send({ message: `Domain successfully changed from ${formattedCurrentDomain} to ${formattedNewDomain}` });
     } catch (err) {
       console.error(`Failed to change domain: ${err.message}`);
       res.status(500).send({ error: `Failed to change domain: ${err.message}` });
     }
   }
+  
 
   async log(req, res, next) {
     try {

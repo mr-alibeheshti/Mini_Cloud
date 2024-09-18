@@ -191,22 +191,21 @@ upstream ${serviceName} {
   async setupNginx(domain, serviceName) {
     const nginxAvailablePath = '/etc/nginx/sites-available';
     const nginxEnabledPath = '/etc/nginx/sites-enabled';
-    const PubKey = "/etc/nginx/ssl/_wildcard.minicloud.local.pem"
-    const PrivateKey = "/etc/nginx/ssl/_wildcard.minicloud.local-key.pem"
-
+    const certPath = "/etc/nginx/ssl"
     await fs.mkdir(nginxAvailablePath, { recursive: true });
     await fs.mkdir(nginxEnabledPath, { recursive: true });
 
     const nginxConfigPath = path.join(nginxAvailablePath, domain);
     const nginxConfigLink = path.join(nginxEnabledPath, domain);
+    execSync(`cd /etc/nginx/ssl ; mkcert ${domain}`);
 
-    const nginxConfig =
-     `server {
+    const nginxConfig = 
+    `server {
         listen 443 ssl;
         server_name ${domain};
     
-        ssl_certificate ${PubKey};
-        ssl_certificate_key ${PrivateKey};
+        ssl_certificate /etc/nginx/ssl/${domain}.pem;
+        ssl_certificate_key /etc/nginx/ssl/${domain}-key.pem;
     
         location / {
             proxy_pass http://${serviceName};
