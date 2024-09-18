@@ -1,14 +1,17 @@
 const Docker = require('dockerode');
 const fs = require('fs').promises;
 const path = require('path');
-const { exec,execSync } = require('child_process');
+const { exec, execSync } = require('child_process');
 const net = require('net');
+const MongoClient = require('mongodb').MongoClient;
 
 const docker = new Docker({ socketPath: '/var/run/docker.sock' });
+const mongoUri = 'mongodb://mongo:27017';
 
 class RunController {
   constructor() {
     this.docker = docker;
+    this.mongoClient = new MongoClient(mongoUri, { useNewUrlParser: true, useUnifiedTopology: true });
   }
 
   generateRandomSubdomain() {
@@ -49,6 +52,26 @@ class RunController {
     return isDomainConfigured || isPortUsed;
   }
 
+  async connectToMongoDB() {
+    try {
+      await this.mongoClient.connect();
+      console.log('Connected to MongoDB');
+    } catch (err) {
+      throw new Error(`Failed to connect to MongoDB: ${err.message}`);
+    }
+  }
+
+  async saveServiceToDatabase(serviceInfo) {
+    const db = this.mongoClient.db('minicloud');
+    const collection = db.collection('services');
+    try {
+      await collection.insertOne(serviceInfo);
+      console.log('Service information saved to MongoDB');
+    } catch (err) {
+      throw new Error(`Failed to save service to MongoDB: ${err.message}`);
+    }
+  }
+
   async run(req, res, next) {
     try {
       const { imageName, hostPort, containerPort, cpu, volume, environment, memory, domain } = req.query;
@@ -68,6 +91,18 @@ class RunController {
   
       const query = { cpu, volume, environment, memory };
       const data = await this.runService(imageName, hostPort, containerPort, domain, query);
+      
+      await this.connectToMongoDB();
+      await this.saveServiceToDatabase({
+        imageName,
+        hostPort,
+        containerPort,
+        cpu,
+        volume,
+        environment,
+        memory,
+        domain
+      });
   
       res.send(data);
     } catch (err) {
@@ -191,7 +226,7 @@ upstream ${serviceName} {
   async setupNginx(domain, serviceName) {
     const nginxAvailablePath = '/etc/nginx/sites-available';
     const nginxEnabledPath = '/etc/nginx/sites-enabled';
-    const certPath = "/etc/nginx/ssl"
+    const certPath = "/etc/nginx/ssl";
     await fs.mkdir(nginxAvailablePath, { recursive: true });
     await fs.mkdir(nginxEnabledPath, { recursive: true });
 
@@ -236,7 +271,7 @@ upstream ${serviceName} {
         }
         console.log(`Nginx test stdout: ${stdout}`);
 
-        exec(' systemctl restart nginx.service', (error, stdout, stderr) => {
+        exec('systemctl restart nginx.service', (error, stdout, stderr) => {
           if (error) {
             console.error(`Restart error: ${error.message}`);
             return;

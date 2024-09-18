@@ -2,9 +2,10 @@ FROM node:18
 
 USER root
 
-RUN apt-get update && apt-get install -y nginx sudo && \
-    apt-get install -y mkcert && mkcert -install && \
-    apt-get install -y systemd
+RUN apt-get update && apt-get install -y nginx sudo \
+    glusterfs-client lvm2 mkcert systemd
+
+RUN mkcert -install
 
 WORKDIR /app
 

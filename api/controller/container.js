@@ -98,8 +98,8 @@ class ContainerController {
       await fs.writeFile(sslNginxConfigPath, sslNginxConfig);
       console.log(`Nginx SSL configuration for ${formattedNewDomain} created at ${sslNginxConfigPath}`);
   
-      execSync(c'sudo nginx -t');
-      execSync(' systemctl restart nginx.service', (error, stdout, stderr) => {
+      execSync('sudo nginx -t');
+      execSync('systemctl restart nginx.service', (error, stdout, stderr) => {
         if (error) {
           console.error(`Restart error: ${error.message}`);
           return;
@@ -109,7 +109,9 @@ class ContainerController {
           return;
         }
         console.log(`Nginx restarted successfully. ${domain} is now accessible.`);
-      });      console.log('Nginx reloaded');
+      });
+      console.log('Nginx reloaded');
+      
   
       res.send({ message: `Domain successfully changed from ${formattedCurrentDomain} to ${formattedNewDomain}` });
     } catch (err) {

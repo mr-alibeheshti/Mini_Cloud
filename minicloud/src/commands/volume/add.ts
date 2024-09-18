@@ -1,6 +1,5 @@
 import { Args, Flags } from '@oclif/core';
 import axios from 'axios';
-
 import BaseCommand from '../../base-command';
 
 export default class AddVolume extends BaseCommand {
@@ -18,6 +17,7 @@ export default class AddVolume extends BaseCommand {
   async run(): Promise<void> {
     const { args, flags } = await this.parse(AddVolume);
 
+    // Build query parameters for API call
     const queryParams = [];
     if (flags.mountPoint) queryParams.push(`mountPoint=${flags.mountPoint}`);
     if (flags.SizeLimit) queryParams.push(`sizelimit=${flags.SizeLimit}`);
@@ -26,6 +26,7 @@ export default class AddVolume extends BaseCommand {
     console.log('Request URL:', url);
 
     try {
+      // Make API call to create the volume
       const response = await axios.post(url);
       this.log('Response data:', response.data);
     } catch (error) {

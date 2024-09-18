@@ -83,16 +83,28 @@ services:
       - /etc/hosts:/etc/hosts
       - /run/systemd/system:/run/systemd/system
       - /var/run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket
+      - /dev/mapper:/dev/mapper
+      - /dev/minicloudVolume:/dev/minicloudVolume
+      - /dev:/dev  
+      - /run:/run  
+      - /sys:/sys  
+      - /proc:/proc  
     depends_on:
       - redis
     networks:
       - default
     privileged: true
 
-networks:
-  default:
-    driver: bridge
+  mongo:
+    image: mongo:latest
+    volumes:
+      - mongo-data:/data/db
+    ports:
+      - "27017:27017"
+    networks:
+      - default
 
 volumes:
   loki-storage:
   grafana-storage:
+  mongo-data:
