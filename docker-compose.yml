@@ -98,7 +98,7 @@ services:
   mongo:
     image: mongo:latest
     volumes:
-      - mongo-data:/data/db
+      - /var/lib/mongodb:/data/db
     ports:
       - "27017:27017"
     networks:
