@@ -6,7 +6,13 @@ const path = require('path');
 const { execSync } = require('child_process');
 const multer = require('multer');
 const upload = multer({ dest: 'uploads/' });
+const mongoUri = 'mongodb://mongo:27017';
+const { MongoClient } = require('mongodb');
+const WebSocket = require('ws');
+const mongoClient = new MongoClient(mongoUri);
 const tar = require('tar');
+const { Client } = require('ssh2');
+
 class ContainerController {
   constructor() {
     this.docker = docker;
@@ -119,7 +125,6 @@ class ContainerController {
       res.status(500).send({ error: `Failed to change domain: ${err.message}` });
     }
   }
-  
 
   async log(req, res, next) {
     try {
@@ -419,64 +424,72 @@ class ContainerController {
         resolve(data);
       });
     });
-  }
+  } 
+  
   async execShell(containerId, ws) {
     try {
-      const container = docker.getContainer(containerId);
-      const exec = await new Promise((resolve, reject) => {
-        container.exec({
-          AttachStdin: true,
-          AttachStdout: true,
-          AttachStderr: true,
-          Tty: true,
-          Cmd: ['bash'],
-        }, (err, execInstance) => {
-          if (err) return reject(err);
-          resolve(execInstance);
-        });
-      });
-
-      const stream = await new Promise((resolve, reject) => {
-        exec.start({ hijack:true,stdin: true }, (err, execStream) => {
-          if (err) return reject(err);
-          resolve(execStream);
-        });
-      });
-
-      stream.on('data', (chunk) => {
-        ws.send(chunk);
-      });
-
-      stream.on('end', () => {
+      await mongoClient.connect();
+      const database = mongoClient.db('minicloud');
+      const servicesCollection = database.collection('services');
+  
+      const service = await servicesCollection.findOne({ containerId: containerId });
+      if (!service) {
+        ws.send(`Service with container ID ${containerId} not found in the database.`);
         ws.close();
+        return;
+      }
+  
+      const IP = service.ipAddress;
+      const username = 'minicloud';
+      const password = 'minicloud'; 
+      const conn = new Client();
+  
+      conn.on('ready', () => {
+        ws.send('SSH Connection Established');
+        
+        conn.shell((err, stream) => {
+          if (err) {
+            ws.send(`Error: ${err.message}`);
+            return;
+          }
+  
+          stream.write(`docker exec -it ${containerId} bash -c "exec bash"\n`); 
+          
+          stream.on('data', (data) => {
+            ws.send(data.toString('utf8'));
+          }).on('close', () => {
+            conn.end();
+          });
+  
+          ws.on('message', (message) => {
+            if (message.trim() === 'exit') {
+              stream.end(); 
+              conn.end();   
+              ws.send('Connection closed.'); 
+            } else {
+              stream.write(message + '\n'); 
+            }
+          });
+  
+          ws.on('close', () => {
+            stream.end();
+            conn.end();
+          });
+        });
+      }).connect({
+        host: IP,
+        port: 22,
+        username: username,
+        password: password,
       });
-
-      stream.on('error', (streamErr) => {
-        ws.send(`Stream Error: ${streamErr.message}`);
-      });
-
-      ws.on('message', (message) => {
-        stream.write(message);
-      });
-
-      ws.on('close', () => {
-        stream.end();
-      });
-
-      ws.on('error', (wsErr) => {
-        stream.end();
-        console.error(`WebSocket Error: ${wsErr.message}`);
-      });
-
     } catch (err) {
-      ws.send(`Error: ${err.message}`);
+      ws.send(`Error executing shell: ${err.message}`);
       ws.close();
+    } finally {
+      await mongoClient.close();
     }
   }
-  
-  
-  
-  
+    
   async buildAndPushImage(req, res) {
       const registry = "reg.technosit.ir/";
       const baseUploadPath = '/home/hajali/Desktop/Code/Mini_Cloud_1/api/uploads';
@@ -557,7 +570,6 @@ class ContainerController {
           dockerBuildStream.on('end', async () => {
               console.log('Image built successfully.');
   
-              // Push the image to the registry
               console.log(`Pushing Docker image ${imageName}...`);
               const pushStream = await docker.getImage(imageName).push({ tag: 'latest' });
   

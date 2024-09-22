@@ -63,13 +63,27 @@ class RunController {
   async saveServiceToDatabase(serviceInfo) {
     const db = this.mongoClient.db('minicloud');
     const collection = db.collection('services');
+  
+    const nodeToIpMap = {
+      'ukpdlf75x9scy32y8plwsd2x6': '192.168.100.204',
+      'au8bz22241dukrrso8o0x5hp4': '192.168.100.120',
+      'jaratge5vg5jaw2alsr38o70o': '192.168.100.111',
+    };
+  
     try {
-      await collection.insertOne(serviceInfo);
+      const nodeId = serviceInfo.nodeId;
+
+      const ipAddress = nodeToIpMap[nodeId] || 'N/A';
+  
+      const serviceWithIp = { ...serviceInfo, ipAddress };
+  
+      await collection.insertOne(serviceWithIp);
       console.log('Service information saved to MongoDB');
     } catch (err) {
       throw new Error(`Failed to save service to MongoDB: ${err.message}`);
     }
   }
+  
 
   async createService(imageName, hostPort, containerPort, cpu, volume, environment, memory, domain) {
     if (!imageName) {
