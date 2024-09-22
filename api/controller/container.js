@@ -453,7 +453,7 @@ class ContainerController {
             return;
           }
   
-          stream.write(`docker exec -it ${containerId} bash -c "exec bash"\n`); 
+          stream.write(`docker exec -it ${containerId} bash -c "exec bash"\n`);
           
           stream.on('data', (data) => {
             ws.send(data.toString('utf8'));
@@ -462,15 +462,16 @@ class ContainerController {
           });
   
           ws.on('message', (message) => {
-            if (message.trim() === 'exit') {
-              stream.end(); 
-              conn.end();   
-              ws.send('Connection closed.'); 
+            const messageString = typeof message === 'string' ? message : String(message);
+  
+            if (messageString.trim() === 'exit') {
+              stream.end();
+              conn.end();
             } else {
-              stream.write(message + '\n'); 
+              stream.write(messageString + '\n');
             }
           });
-  
+    
           ws.on('close', () => {
             stream.end();
             conn.end();
@@ -489,6 +490,7 @@ class ContainerController {
       await mongoClient.close();
     }
   }
+  
     
   async buildAndPushImage(req, res) {
       const registry = "reg.technosit.ir/";
