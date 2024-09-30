@@ -2,8 +2,8 @@ FROM node:18
 
 USER root
 
-RUN apt-get update && apt-get install -y nginx sudo \
-    glusterfs-client lvm2 mkcert systemd
+RUN apt-get update && apt-get install -y nginx \
+    lvm2 mkcert systemd
 
 RUN mkcert -install
 
@@ -13,11 +13,11 @@ COPY . .
 
 RUN npm install
 
-RUN adduser node sudo && \
-    echo "node ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart nginx.service" >> /etc/sudoers
+# RUN adduser node sudo && \
+    # echo "node ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart nginx.service" >> /etc/sudoers
 
 USER node
 
-CMD ["sh", "-c", "sudo service nginx start && node server.js"]
+CMD ["sh", "-c", "node server.js"]
 
 EXPOSE 3500

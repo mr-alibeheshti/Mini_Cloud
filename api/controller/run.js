@@ -231,7 +231,7 @@ async setupNginx(domain, serviceName) {
       }
       console.log(`Nginx test stdout: ${stdout}`);
 
-      exec('sudo systemctl restart nginx.service', (error, stdout, stderr) => {
+      exec('systemctl restart nginx.service', (error, stdout, stderr) => {
         if (error) {
           console.error(`Restart error: ${error.message}`);
           return;
