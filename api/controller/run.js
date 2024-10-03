@@ -110,7 +110,7 @@ class RunController {
     await this.addUpstreamConfig(serviceName, hostPort);
     await this.setupNginx(domain, serviceName);
 
-    const service = await this.docker.createService({
+    const serviceConfig = {
       Name: serviceName,
       TaskTemplate: {
         ContainerSpec: {
@@ -118,7 +118,9 @@ class RunController {
           Env: environment ? environment.split(',').map((env) => env.trim()) : [],
           Mounts: volume ? volume.split(',').map((vol) => {
             const [source, target] = vol.split(':');
-            return { Type: 'bind', Source: source, Target: target };
+            console.log("src is :" + source);
+            console.log("target is :" + target);
+            return { Type: 'volume', Source: source, Target: target };
           }) : [],
           Resources: {
             Limits: {
@@ -132,8 +134,17 @@ class RunController {
       EndpointSpec: {
         Ports: [{ Protocol: 'tcp', TargetPort: containerPortInt, PublishedPort: hostPortInt }],
       },
-    });
-
+    };
+    
+    if (volume) {
+      serviceConfig.TaskTemplate.Placement = {
+        Constraints: ['node.hostname==hajAli'],
+      };
+    }
+    
+    const service = await this.docker.createService(serviceConfig);
+    
+    
     console.log('Service created successfully');
 
     await new Promise((resolve) => setTimeout(resolve, 5000));

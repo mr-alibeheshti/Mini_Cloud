@@ -1,70 +1,70 @@
 version: '3.8'
 
 services:
-  loki:
-    user: root
-    image: grafana/loki:latest
-    ports:
-      - "3100:3100"
-    command: -config.file=/etc/loki/local-config.yaml
-    volumes:
-      - ./logging/loki/config:/etc/loki
-      - loki-storage:/loki
-    networks:
-      - default
+  # loki:
+  #   user: root
+  #   image: grafana/loki:latest
+  #   ports:
+  #     - "3100:3100"
+  #   command: -config.file=/etc/loki/local-config.yaml
+  #   volumes:
+  #     - ./logging/loki/config:/etc/loki
+  #     - loki-storage:/loki
+  #   networks:
+  #     - default
 
-  grafana:
-    image: grafana/grafana:latest
-    ports:
-      - "3000:3000"
-    volumes:
-      - grafana-storage:/var/lib/grafana
-    networks:
-      - default
+  # grafana:
+  #   image: grafana/grafana:latest
+  #   ports:
+  #     - "3000:3000"
+  #   volumes:
+  #     - grafana-storage:/var/lib/grafana
+  #   networks:
+  #     - default
 
-  fluentd:
-    image: my-fluentd-image
-    command: ["fluentd", "-c", "/fluentd/etc/fluent.conf"]
-    volumes:
-      - ./logging/fluentd/:/fluentd/etc
-    ports:
-      - "24224:24224"
-    networks:
-      - default
+  # fluentd:
+  #   image: my-fluentd-image
+  #   command: ["fluentd", "-c", "/fluentd/etc/fluent.conf"]
+  #   volumes:
+  #     - ./logging/fluentd/:/fluentd/etc
+  #   ports:
+  #     - "24224:24224"
+  #   networks:
+  #     - default
 
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: prometheus
-    ports:
-      - 9090:9090
-    command:
-      - --config.file=/etc/prometheus/prometheus.yml
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
-    depends_on:
-      - cadvisor
-    networks:
-      - default
+  # prometheus:
+  #   image: prom/prometheus:latest
+  #   container_name: prometheus
+  #   ports:
+  #     - 9090:9090
+  #   command:
+  #     - --config.file=/etc/prometheus/prometheus.yml
+  #   volumes:
+  #     - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+  #   depends_on:
+  #     - cadvisor
+  #   networks:
+  #     - default
 
-  redis:
-    image: redis:latest
-    container_name: redis
-    ports:
-      - 6379:6379
-    networks:
-      - default
+  # redis:
+  #   image: redis:latest
+  #   container_name: redis
+  #   ports:
+  #     - 6379:6379
+  #   networks:
+  #     - default
 
-  cadvisor:
-    image: abeheshti127/cadvisor
-    container_name: cadvisor
-    ports:
-      - 8080:8080
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - /sys:/sys
-      - /var/lib/docker/:/var/lib/docker:ro
-    networks:
-      - default
+  # cadvisor:
+  #   image: abeheshti127/cadvisor
+  #   container_name: cadvisor
+  #   ports:
+  #     - 8080:8080
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #     - /sys:/sys
+  #     - /var/lib/docker/:/var/lib/docker:ro
+  #   networks:
+  #     - default
 
   api:
     user: root
@@ -75,7 +75,10 @@ services:
       - "3500:3500"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/docker/volumes/:/var/lib/docker/volumes/
+      - /Volumes:/Volumes
       - ./api:/app
+      - /dev:/dev
       - /etc/nginx/sites-available:/etc/nginx/sites-available
       - /etc/nginx/sites-enabled:/etc/nginx/sites-enabled
       - /etc/nginx/ssl:/etc/nginx/ssl
@@ -85,15 +88,17 @@ services:
       - /var/run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket
       - /dev/mapper:/dev/mapper
       - /dev/minicloudVolume:/dev/minicloudVolume
-      - /dev:/dev  
       - /run:/run  
       - /sys:/sys  
       - /proc:/proc  
-    depends_on:
-      - redis
+
     networks:
       - default
     privileged: true
+
+
+
+
 
   mongo:
     image: mongo:latest
