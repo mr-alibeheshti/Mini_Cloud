@@ -3,7 +3,7 @@ FROM node:18
 USER root
 
 RUN apt-get update && apt-get install -y nginx \
-    lvm2 mkcert systemd sudo
+    lvm2 mkcert systemd
 
 RUN mkcert -install
 

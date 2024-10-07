@@ -3,7 +3,6 @@ const app = express();
 
 app.use(express.json());
 app.use("/api/v1/container", require("./routes/container"));
-app.use("/api/v1/volume", require("./routes/volume"));
 app.use("/api/v1/run", require("./routes/run"));
 
 app.all("*", (req, res, next) => {
