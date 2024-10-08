@@ -68,7 +68,6 @@ class RunController {
   
 
   async createService(imageName, containerPort, cpu, volume, environment, memory, domain) {
-    const containerPortInt = parseInt(containerPort, 10);
     if (!imageName) {
       throw new Error('Image name must be provided');
     }

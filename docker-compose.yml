@@ -101,6 +101,22 @@ services:
       - "27017:27017"
     networks:
       - default
+  nginx:
+    image: nginx:latest 
+    ports:
+      - "80:80"
+    volumes:
+      - /etc/nginx/nginx.conf:/etc/nginx/nginx.conf  
+      - /etc/nginx/sites-available:/etc/nginx/sites-available  
+      - /etc/nginx/sites-enabled:/etc/nginx/sites-enabled 
+      - /etc/nginx/ssl:/etc/nginx/ssl
+    networks:
+      - default  
+
+networks:
+  default:
+    driver: overlay
+    attachable: true 
 
 volumes:
   loki-storage:

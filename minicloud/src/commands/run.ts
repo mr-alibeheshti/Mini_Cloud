@@ -20,7 +20,7 @@ export default class Run extends BaseCommand {
     cpu: Flags.integer({ char: 'c', description: 'CPU quota for the container as a percentage' }),
     environment: Flags.string({ char: 'e', description: 'Environment data in format KEY=value,KEY2=value2' }),
     name: Flags.string({ char: 'n', description: 'Custom name of Container' }),
-    port: Flags.string({ char: 'p', description: 'Port of Host:Container', required: true }),
+    port: Flags.integer({ char: 'p', description: 'Port of Container'}),
     ram: Flags.integer({ char: 'r', description: 'Memory limit for the container in MB' }),
     volume: Flags.string({ char: 'v', description: 'Volume mapping in format hostPath:containerPath', required: false }),
   };
@@ -28,22 +28,15 @@ export default class Run extends BaseCommand {
   async run(): Promise<void> {
     const { args, flags } = await this.parse(Run);
 
-    if (!flags.port || !flags.port.includes(':')) {
-      this.error('Invalid port format. Use the format hostPort:containerPort.');
-      return;
-    }
-
-    const [hostPort, containerPort] = flags.port.split(':');
-
     const imageName = encodeURIComponent(args.Image);
     const domain = args.Domain ? encodeURIComponent(args.Domain) : '';
     const cpu = flags.cpu ? `&cpu=${encodeURIComponent(flags.cpu.toString())}` : '';
     const memory = flags.ram ? `&memory=${encodeURIComponent(flags.ram.toString())}` : '';
+    const containerPort = flags.port ? `&containerPort=${encodeURIComponent(flags.port)}` : '&containerPort=80';
     const volume = flags.volume ? `&volume=${encodeURIComponent(flags.volume)}` : '';
     const environment = flags.environment ? `&environment=${encodeURIComponent(flags.environment)}` : '';
-
-    const url = `http://localhost:3500/api/v1/run?imageName=${imageName}&domain=${domain}&hostPort=${hostPort}&containerPort=${containerPort}${cpu}${memory}${volume}${environment}`;
-    
+    const url = `http://localhost:3500/api/v1/run?imageName=${imageName}${containerPort}&domain=${domain}${cpu}${memory}${volume}${environment}`;
+    console.log(url);
     try {
       const response = await axios.post(url);
       this.log('Response data:', response.data);
