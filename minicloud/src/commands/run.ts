@@ -28,13 +28,13 @@ export default class Run extends BaseCommand {
   async run(): Promise<void> {
     const { args, flags } = await this.parse(Run);
 
-    const imageName = encodeURIComponent(args.Image);
-    const domain = args.Domain ? encodeURIComponent(args.Domain) : '';
-    const cpu = flags.cpu ? `&cpu=${encodeURIComponent(flags.cpu.toString())}` : '';
-    const memory = flags.ram ? `&memory=${encodeURIComponent(flags.ram.toString())}` : '';
-    const containerPort = flags.port ? `&containerPort=${encodeURIComponent(flags.port)}` : '&containerPort=80';
-    const volume = flags.volume ? `&volume=${encodeURIComponent(flags.volume)}` : '';
-    const environment = flags.environment ? `&environment=${encodeURIComponent(flags.environment)}` : '';
+    const imageName = (args.Image);
+    const domain = args.Domain ? (args.Domain) : '';
+    const cpu = flags.cpu ? `&cpu=${(flags.cpu.toString())}` : '';
+    const memory = flags.ram ? `&memory=${(flags.ram.toString())}` : '';
+    const containerPort = flags.port ? `&containerPort=${(flags.port)}` : '&containerPort=80';
+    const volume = flags.volume ? `&volume=${(flags.volume)}` : '';
+    const environment = flags.environment ? `&environment=${(flags.environment)}` : '';
     const url = `http://localhost:3500/api/v1/run?imageName=${imageName}${containerPort}&domain=${domain}${cpu}${memory}${volume}${environment}`;
     console.log(url);
     try {

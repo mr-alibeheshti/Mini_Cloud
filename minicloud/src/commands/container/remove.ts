@@ -18,7 +18,9 @@ export default class Remove extends BaseCommand {
     const { args, flags } = await this.parse(Remove);
 
     try {
-      const response = await axios.post(`http://localhost:3500/api/v1/container/remove/${args.ContainerId}/${flags.force ? '?force=true' : ''}`);
+      const ContainerId = (args.ContainerId);
+      const force = (`${flags.force ? '?force=true' : ''}`);
+      const response = await axios.post(`http://localhost:3500/api/v1/container/remove/${ContainerId}/${force}`);
       this.log('Response data:', response.data.message);
     } catch (error: any) {
       this.handleError(error);

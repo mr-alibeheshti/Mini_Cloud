@@ -14,7 +14,8 @@ export default class Logs extends BaseCommand {
     const { args } = await this.parse(Logs);
 
     try {
-      const response = await axios.post(`http://localhost:3500/api/v1/container/log/${args.ContainerId}`);
+      const ContainerId = (args.ContainerId);
+      const response = await axios.post(`http://localhost:3500/api/v1/container/log/${ContainerId}`);
       this.log('Response data:', response.data.data);
     } catch (error: any) {
       this.handleError(error);

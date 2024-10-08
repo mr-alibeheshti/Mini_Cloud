@@ -14,7 +14,8 @@ export default class Inspect extends BaseCommand {
     const { args } = await this.parse(Inspect);
 
     try {
-      const response = await axios.post(`http://localhost:3500/api/v1/container/inspect/${args.ContainerId}`);
+      const ContainerId = (args.ContainerId);
+      const response = await axios.post(`http://localhost:3500/api/v1/container/inspect/${ContainerId}`);
       this.log('Response data:', response.data);
     } catch (error: any) {
       this.handleError(error);

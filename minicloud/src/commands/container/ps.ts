@@ -14,7 +14,8 @@ export default class Ps extends BaseCommand {
     const { flags } = await this.parse(Ps);
 
     try {
-      const response = await axios.get(`http://localhost:3500/api/v1/container/ps${flags.all ? '?all=true' : ''}`);
+      const all = (`ps${flags.all ? '?all=true' : ''}`);
+      const response = await axios.get(`http://localhost:3500/api/v1/container/${all}`);
       this.log('Response data:', response.data.results);
     } catch (error: any) {
       this.handleError(error);

@@ -16,21 +16,19 @@ export default class AddVolume extends BaseCommand {
 
   async run(): Promise<void> {
     const { args, flags } = await this.parse(AddVolume);
-
-    // Build query parameters for API call
-    const queryParams = [];
-    if (flags.mountPoint) queryParams.push(`mountPoint=${flags.mountPoint}`);
-    if (flags.SizeLimit) queryParams.push(`sizelimit=${flags.SizeLimit}`);
-
-    const url = `http://localhost:3501/api/v1/volume/add/${args.name}${queryParams.length > 0 ? '?' + queryParams.join('&') : ''}`;
-    console.log('Request URL:', url);
-
+  
     try {
-      // Make API call to create the volume
+      const mountPoint = (flags.mountPoint ? `?mountPoint=${flags.mountPoint}` : '');
+      const sizeLimit = (flags.SizeLimit ? `&sizeLimit=${flags.SizeLimit}` : '');
+  
+      const url = `http://localhost:3501/api/v1/volume/add/${args.name}${mountPoint}${sizeLimit}`;
+      console.log('Request URL:', url);
+  
       const response = await axios.post(url);
       this.log('Response data:', response.data);
-    } catch (error) {
+    } catch (error: any) {
       this.handleError(error);
     }
   }
 }
+  

@@ -161,7 +161,6 @@ async setupNginx(domain, serviceName,containerPort) {
   `server {
       listen 80;
       server_name ${domain};
-  
       location / {
           proxy_pass http://${serviceName}:${containerPort};
           proxy_set_header Host $host;
