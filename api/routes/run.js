@@ -6,9 +6,9 @@ const runController = new RunController();
 
 router.post('/', async (req, res, next) => {
   try {
-    const { imageName, hostPort, containerPort, cpu, volume, environment, memory, domain } = req.query;
+    const { imageName, containerPort, cpu, volume, environment, memory, domain } = req.query;
     
-    const result = await runController.createService(imageName, hostPort, containerPort, cpu, volume, environment, memory, domain);
+    const result = await runController.createService(imageName, containerPort, cpu, volume, environment, memory, domain);
     res.status(201).json(result);
   } catch (err) {
     next(err);
