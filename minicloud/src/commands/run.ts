@@ -35,7 +35,7 @@ export default class Run extends BaseCommand {
     const containerPort = flags.port ? `&containerPort=${(flags.port)}` : '&containerPort=80';
     const volume = flags.volume ? `&volume=${(flags.volume)}` : '';
     const environment = flags.environment ? `&environment=${(flags.environment)}` : '';
-    const url = `http://localhost:3500/api/v1/run?imageName=${imageName}${containerPort}&domain=${domain}${cpu}${memory}${volume}${environment}`;
+    const url = `http://192.168.100.204:3500/api/v1/run?imageName=${imageName}${containerPort}&domain=${domain}${cpu}${memory}${volume}${environment}`;
     console.log(url);
     try {
       const response = await axios.post(url);

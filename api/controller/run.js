@@ -106,7 +106,7 @@ class RunController {
             },
           },
         },
-        Networks: [{ Target: 'mini_cloud_1_default' }],
+        Networks: [{ Target: 'minicloud_1_default' }],
       },
     };
     

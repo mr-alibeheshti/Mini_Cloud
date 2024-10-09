@@ -14,7 +14,7 @@ export default class ExecShell extends Command {
     const {containerId} = args;
 
     try {
-      const ws = new WebSocket(`ws://localhost:3500/api/v1/container/shell/${containerId}`);
+      const ws = new WebSocket(`ws://192.168.100.204:3500//api/v1/container/shell/${containerId}`);
 
       ws.on('open', () => {
         console.log(`Connected to shell of container ${containerId}`);

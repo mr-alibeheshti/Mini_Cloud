@@ -68,9 +68,10 @@ services:
 
   api:
     user: root
-    build:
-      context: ./api
-      dockerfile: Dockerfile
+    image: mini_cloud_1-api
+    # build:
+    #   context: ./api
+    #   dockerfile: Dockerfile
     ports:
       - "3500:3500"
     volumes:
